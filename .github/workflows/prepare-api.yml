@@ -1,0 +1,67 @@
+name: Preparar e validar API Linux
+on:
+  workflow_dispatch:
+    inputs:
+      model_release:
+        description: Release privada com o checkpoint treinado
+        default: modelo-v1
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: prepare-api
+  cancel-in-progress: false
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+  container:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+      MODEL_SHA256: ${{ vars.MODEL_SHA256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir template Azure sem criar recursos
+        run: az bicep build --file infra/api.bicep --outfile "$RUNNER_TEMP/api.json"
+      - name: Obter e conferir modelo treinado
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODEL_RELEASE: ${{ inputs.model_release }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${SUPABASE_URL:?}" "${SUPABASE_PUBLISHABLE_KEY:?}" "${MODEL_SHA256:?}"
+          gh release download "$MODEL_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern best.pt --pattern SHA256SUMS.txt --dir api/models
+          expected=$(awk '$2 == "best.pt" {print $1}' api/models/SHA256SUMS.txt)
+          [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]]
+          [[ "${expected,,}" == "$MODEL_SHA256" ]]
+          cd api/models
+          printf '%s  best.pt\n' "$expected" | sha256sum --check --strict
+      - name: Construir imagem CPU
+        run: docker build --build-arg MODEL_SHA256="$MODEL_SHA256" --tag viaalerta-api:validated api
+      - name: Testar container com inferência real
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --env SUPABASE_URL --env SUPABASE_PUBLISHABLE_KEY \
+            --volume "$PWD/api/tests/smoke_container.py:/tmp/smoke_container.py:ro" \
+            viaalerta-api:validated python /tmp/smoke_container.py | tee api-container-smoke.log
+      - name: Conferir servidor HTTP do container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach --name api-http --env SUPABASE_URL --env SUPABASE_PUBLISHABLE_KEY \
+            --publish 127.0.0.1:8000:8000 viaalerta-api:validated
+          trap 'docker logs api-http; docker rm --force api-http >/dev/null' EXIT
+          curl --fail --retry 30 --retry-delay 2 --retry-all-errors --max-time 5 http://127.0.0.1:8000/health
+          code=$(curl --silent --output /dev/null --write-out '%{http_code}' --form 'file=@api/requirements.txt;type=text/plain' http://127.0.0.1:8000/detect)
+          [[ "$code" == 401 ]]
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-container-validation
+          path: api-container-smoke.log
+          retention-days: 7

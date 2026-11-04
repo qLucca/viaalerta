@@ -80,6 +80,10 @@ py -3.11 -m venv .venv
 .venv/Scripts/python -m pip install -r api/requirements.txt
 ```
 
+O checkpoint não acompanha o Git. Baixe `best.pt` e `SHA256SUMS.txt` da Release
+privada `modelo-v1` e coloque-os em `api/models/`. O dataset não é necessário para
+executar a API. A inicialização recusa um modelo diferente de `EXPECTED_MODEL_SHA256`.
+
 Crie o arquivo local `api/.env` com as variáveis descritas abaixo e inicie:
 
 ```powershell
@@ -92,6 +96,7 @@ sobrescreve o serviço. Execute o comando a partir da raiz do projeto.
 | Variável                   | Finalidade                                              |
 | -------------------------- | ------------------------------------------------------- |
 | `MODEL_PATH`               | Caminho para o checkpoint existente                     |
+| `EXPECTED_MODEL_SHA256` | SHA-256 do checkpoint da Release |
 | `SUPABASE_URL`             | URL HTTPS do Supabase                                   |
 | `SUPABASE_PUBLISHABLE_KEY` | Chave pública usada para confirmar a sessão             |
 | `CORS_ORIGINS`             | Origens web permitidas, separadas por vírgula           |
@@ -233,3 +238,9 @@ com `git status` e `git diff --cached`; não envie todo o diretório indiscrimin
 As listas pessoais são paginadas em grupos de 50 registros. O mapa consulta até
 500 pontos por área e pede para aproximar ou filtrar quando esse limite é atingido.
 Os totais do painel e do perfil são consultados separadamente, sem baixar toda a base.
+
+O workflow **Preparar e validar API Linux** constrói a imagem CPU, confere o template
+Azure e executa inferência real em imagens sintéticas dentro do container. Ele não
+publica na Azure. O workflow **Publicar API com modelo treinado** usa a mesma Release
+e requer os IDs OIDC configurados em Actions. As configurações Supabase ficam em
+secrets; os arquivos locais de configuração e o guia Azure não acompanham o Git.

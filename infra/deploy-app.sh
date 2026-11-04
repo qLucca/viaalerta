@@ -16,21 +16,42 @@ case "$component" in
   *) echo 'Componente inválido.' >&2; exit 1 ;;
 esac
 name="viaalerta-$component"
-existing=$(az containerapp list -g "$AZURE_RESOURCE_GROUP" --query "[?name=='$name'].name | [0]" -o tsv)
-if [[ -n "$existing" ]]; then
+if [[ "$component" == api ]]; then
+  : "${MODEL_SHA256:?Informe o hash do checkpoint publicado}"
+  template="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/api.bicep"
+  az deployment group create --name "viaalerta-api-${GITHUB_RUN_ID:-$(date +%s)}" \
+    --resource-group "$AZURE_RESOURCE_GROUP" --template-file "$template" \
+    --parameters appName="$name" environmentName="$AZURE_CONTAINER_ENV" \
+      pullIdentityName="${AZURE_PULL_IDENTITY##*/}" registryServer="$AZURE_REGISTRY_SERVER" \
+      image="$image" supabaseUrl="$SUPABASE_URL" supabasePublicKey="$SUPABASE_PUBLISHABLE_KEY" \
+      corsOrigins="$CORS_ORIGINS" modelSha256="$MODEL_SHA256" --only-show-errors --output none
+else
+  existing=$(az containerapp list -g "$AZURE_RESOURCE_GROUP" --query "[?name=='$name'].name | [0]" -o tsv)
+  if [[ -n "$existing" ]]; then
   az containerapp update -n "$name" -g "$AZURE_RESOURCE_GROUP" --image "$image" \
     --set-env-vars "${env_args[@]}" --cpu "$cpu" --memory "$memory" \
     --min-replicas 1 --max-replicas 1 --output none
-else
+  else
   az containerapp create -n "$name" -g "$AZURE_RESOURCE_GROUP" \
     --environment "$AZURE_CONTAINER_ENV" --image "$image" \
     --user-assigned "$AZURE_PULL_IDENTITY" --registry-identity "$AZURE_PULL_IDENTITY" \
     --registry-server "$AZURE_REGISTRY_SERVER" --ingress external --target-port "$port" \
     --cpu "$cpu" --memory "$memory" --min-replicas 1 --max-replicas 1 \
     --env-vars "${env_args[@]}" --output none
+  fi
 fi
 host=$(az containerapp show -n "$name" -g "$AZURE_RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
 if [[ "$component" == api ]]; then
+  ready=false
+  for attempt in {1..60}; do
+    revision=$(az containerapp show -n "$name" -g "$AZURE_RESOURCE_GROUP" --query properties.latestReadyRevisionName -o tsv)
+    if [[ -n "$revision" ]]; then
+      running=$(az containerapp revision show -n "$name" -g "$AZURE_RESOURCE_GROUP" --revision "$revision" --query properties.template.containers[0].image -o tsv)
+      if [[ "$running" == "$image" ]]; then ready=true; break; fi
+    fi
+    sleep 5
+  done
+  [[ "$ready" == true ]] || { echo 'A nova revisão não ficou pronta. Confira os logs na Azure.' >&2; exit 1; }
   health=$(curl --fail --retry 12 --retry-delay 10 --retry-all-errors --max-time 15 "https://$host/health")
   : "${MODEL_SHA256:?Informe o hash do checkpoint publicado}"
   HEALTH_JSON="$health" python - <<'PY'
@@ -51,3 +72,7 @@ else
   curl --fail --retry 6 --retry-delay 10 --retry-all-errors --max-time 15 --output /dev/null "https://$host/"
 fi
 echo "URL: https://$host"
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  echo "URL publicada: https://$host" >> "$GITHUB_STEP_SUMMARY"
+  [[ "$component" != api ]] || echo "Endpoint de detecção: https://$host/detect" >> "$GITHUB_STEP_SUMMARY"
+fi

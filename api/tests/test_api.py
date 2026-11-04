@@ -68,6 +68,7 @@ def main():
             module.YOLO = FakeYOLO
             module.SUPABASE_URL = 'https://teste.supabase.co'
             module.SUPABASE_KEY = 'sb_publishable_teste'
+            module.HASH_ESPERADO = ''
 
             image = BytesIO()
             Image.new('RGB', (640, 480), 'gray').save(image, format='JPEG')
@@ -82,6 +83,14 @@ def main():
                     assert FakeYOLO.loads == 0
                 passed('Sem best.pt, a API recusa iniciar e não carrega pesos pré-treinados de fallback')
                 module.PESOS.touch()
+                with patch.object(module, 'HASH_ESPERADO', '0' * 64):
+                    try:
+                        with TestClient(module.app):
+                            raise AssertionError('O servidor não pode carregar checkpoint com hash incorreto')
+                    except RuntimeError as error:
+                        assert 'SHA-256' in str(error)
+                        assert FakeYOLO.loads == 0
+                passed('Checkpoint com hash diferente é recusado antes de carregar o YOLO')
                 with patch.object(module.torch.cuda, 'is_available', return_value=False):
                     with TestClient(module.app) as client:
                         assert client.get('/health').json()['device'] == 'cpu'

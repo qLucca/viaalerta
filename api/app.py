@@ -28,7 +28,10 @@ os.environ["YOLO_AUTOINSTALL"] = "False"
 from ultralytics import YOLO
 
 PROJETO = Path(__file__).resolve().parent.parent
-PESOS = Path(os.getenv("MODEL_PATH", str(PROJETO / "notebooks/treinamentos/buracos_aug_nativo_01/yolo_300ep-3/weights/best.pt"))).expanduser()
+PESOS = Path(os.getenv("MODEL_PATH", str(PROJETO / "api/models/best.pt"))).expanduser()
+if not PESOS.is_absolute():
+    PESOS = PROJETO / PESOS
+HASH_ESPERADO = os.getenv("EXPECTED_MODEL_SHA256", "").strip().lower()
 CONFIANCA = float(os.getenv("CONFIANCA", "0.25"))
 if not math.isfinite(CONFIANCA) or not 0 < CONFIANCA <= 1:
     raise ValueError("CONFIANCA deve estar entre 0 (exclusivo) e 1.")
@@ -69,6 +72,10 @@ async def carregar_modelo(app: FastAPI):
         )
     if not SUPABASE_URL.startswith("https://") or not SUPABASE_KEY:
         raise RuntimeError("Configure SUPABASE_URL HTTPS e SUPABASE_PUBLISHABLE_KEY.")
+    with PESOS.open("rb") as arquivo:
+        app.state.model_sha256 = hashlib.file_digest(arquivo, "sha256").hexdigest()
+    if HASH_ESPERADO and app.state.model_sha256 != HASH_ESPERADO:
+        raise RuntimeError("O checkpoint não corresponde ao SHA-256 configurado.")
     app.state.modelo = YOLO(str(PESOS))
     if app.state.modelo.task != "detect":
         raise RuntimeError("O checkpoint precisa ser de um modelo YOLO de detecção.")
@@ -76,8 +83,6 @@ async def carregar_modelo(app: FastAPI):
     if app.state.dispositivo == "cpu":
         torch.set_num_threads(int(os.getenv("CPU_THREADS", "1")))
     app.state.trava = asyncio.Lock()
-    with PESOS.open("rb") as arquivo:
-        app.state.model_sha256 = hashlib.file_digest(arquivo, "sha256").hexdigest()
 
     with Image.new("RGB", (640, 640)) as imagem:
         app.state.modelo.predict(source=imagem, imgsz=640, conf=CONFIANCA,
