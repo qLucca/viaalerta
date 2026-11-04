@@ -19,9 +19,10 @@ name="viaalerta-$component"
 if [[ "$component" == api ]]; then
   : "${MODEL_SHA256:?Informe o hash do checkpoint publicado}"
   template="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/api.bicep"
+  environment_location=$(az containerapp env show -n "$AZURE_CONTAINER_ENV" -g "$AZURE_RESOURCE_GROUP" --query location -o tsv)
   az deployment group create --name "viaalerta-api-${GITHUB_RUN_ID:-$(date +%s)}" \
     --resource-group "$AZURE_RESOURCE_GROUP" --template-file "$template" \
-    --parameters appName="$name" environmentName="$AZURE_CONTAINER_ENV" \
+    --parameters appName="$name" location="$environment_location" environmentName="$AZURE_CONTAINER_ENV" \
       pullIdentityName="${AZURE_PULL_IDENTITY##*/}" registryServer="$AZURE_REGISTRY_SERVER" \
       image="$image" supabaseUrl="$SUPABASE_URL" supabasePublicKey="$SUPABASE_PUBLISHABLE_KEY" \
       corsOrigins="$CORS_ORIGINS" modelSha256="$MODEL_SHA256" --only-show-errors --output none

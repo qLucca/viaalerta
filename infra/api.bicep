@@ -1,4 +1,5 @@
 param appName string = 'viaalerta-api'
+param location string = resourceGroup().location
 param environmentName string = 'viaalerta-env'
 param pullIdentityName string = 'viaalerta-pull'
 param registryServer string
@@ -17,7 +18,7 @@ resource pullIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-
 }
 resource api 'Microsoft.App/containerApps@2024-03-01' = {
   name: appName
-  location: environment.location
+  location: location
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
