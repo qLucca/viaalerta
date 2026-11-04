@@ -1,0 +1,20 @@
+# Treinamento e avaliação. Mantenha o PyTorch com CUDA do seu ambiente de treino.
+torch==2.11.0
+torchvision==0.26.0
+ultralytics==8.4.198
+
+# Dados e imagens
+numpy==2.4.4
+pandas==3.0.2
+Pillow==12.2.0
+PyYAML==6.0.3
+
+# Avaliação e visualização
+torchmetrics==1.9.0
+pycocotools==2.0.11
+matplotlib==3.10.9
+tqdm==4.67.3
+
+# Notebook
+jupyterlab==4.5.8
+ipykernel==7.2.0

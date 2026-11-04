@@ -1,0 +1,9 @@
+# Inferência: PyTorch CPU é instalado separadamente pelo Dockerfile ou pelo README.
+ultralytics==8.4.198
+fastapi==0.162.0
+uvicorn[standard]==0.46.0
+python-multipart==0.0.28
+Pillow==12.2.0
+httpx==0.28.1
+python-dotenv==1.2.2
+psutil==7.2.2
