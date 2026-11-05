@@ -45,11 +45,10 @@ host=$(az containerapp show -n "$name" -g "$AZURE_RESOURCE_GROUP" --query proper
 if [[ "$component" == api ]]; then
   ready=false
   for attempt in {1..60}; do
-    revision=$(az containerapp show -n "$name" -g "$AZURE_RESOURCE_GROUP" --query properties.latestReadyRevisionName -o tsv)
-    if [[ -n "$revision" ]]; then
-      running=$(az containerapp revision show -n "$name" -g "$AZURE_RESOURCE_GROUP" --revision "$revision" --query properties.template.containers[0].image -o tsv)
-      if [[ "$running" == "$image" ]]; then ready=true; break; fi
-    fi
+    # Consulta a saude da revisao; latestReadyRevisionName pode vir ausente na CLI.
+    revision=$(az containerapp revision list -n "$name" -g "$AZURE_RESOURCE_GROUP" \
+      --query "[?properties.active && properties.healthState=='Healthy' && properties.runningState=='Running' && properties.template.containers[0].image=='$image'].name | [0]" -o tsv --only-show-errors)
+    if [[ -n "$revision" ]]; then ready=true; break; fi
     sleep 5
   done
   [[ "$ready" == true ]] || { echo 'A nova revisão não ficou pronta. Confira os logs na Azure.' >&2; exit 1; }
