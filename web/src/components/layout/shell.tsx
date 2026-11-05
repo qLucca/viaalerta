@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import {
   LayoutDashboard,
   Map,
@@ -39,8 +39,12 @@ export function Logo() {
     </Link>
   );
 }
+const subscribeToHydration = () => () => {};
+
 export function ThemeSwitch() {
   const { theme, setTheme } = useTheme();
+  // A preferência salva só pode marcar um botão depois da hidratação.
+  const hydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false);
   return (
     <div className="theme-switch" aria-label="Preferência de tema">
       {[
@@ -52,7 +56,7 @@ export function ThemeSwitch() {
           key={value}
           title={label}
           aria-label={`Tema ${label}`}
-          aria-pressed={theme === value}
+          aria-pressed={hydrated && theme === value}
           onClick={() => setTheme(value)}
         >
           <Icon size={16} />
