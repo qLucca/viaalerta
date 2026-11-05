@@ -7,6 +7,11 @@ on:
         required: true
         default: modelo-v1
         type: string
+      diagnose_only:
+        description: Consultar estado e logs da API existente, sem publicar
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
   id-token: write
@@ -44,6 +49,7 @@ jobs:
           : "${AZURE_SUBSCRIPTION_ID:?}" "${SUPABASE_URL:?}" "${SUPABASE_PUBLISHABLE_KEY:?}"
           : "${AZURE_RESOURCE_GROUP:?}" "${AZURE_CONTAINER_ENV:?}" "${AZURE_REGISTRY:?}" "${AZURE_REGISTRY_SERVER:?}" "${AZURE_PULL_IDENTITY:?}" "${CORS_ORIGINS:?}"
       - name: Obter o checkpoint escolhido, sem treinar
+        if: ${{ !inputs.diagnose_only }}
         env:
           GH_TOKEN: ${{ github.token }}
           MODEL_RELEASE: ${{ inputs.model_release }}
@@ -64,6 +70,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID || vars.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || vars.AZURE_SUBSCRIPTION_ID }}
       - name: Construir, publicar e verificar
+        if: ${{ !inputs.diagnose_only }}
         shell: bash
         run: |
           set -euo pipefail
@@ -73,3 +80,13 @@ jobs:
           docker build --build-arg MODEL_SHA256="$MODEL_SHA256" -t "$image" api
           docker push "$image"
           bash infra/deploy-app.sh api "$image"
+      - name: Consultar estado e logs da API
+        if: ${{ failure() || inputs.diagnose_only }}
+        shell: bash
+        run: |
+          set -u
+          az extension add --name containerapp --upgrade --only-show-errors
+          az containerapp show -n viaalerta-api -g "$AZURE_RESOURCE_GROUP" --query '{state:properties.provisioningState,error:properties.provisioningError,latest:properties.latestRevisionName,ready:properties.latestReadyRevisionName,host:properties.configuration.ingress.fqdn}' -o json
+          az containerapp revision list -n viaalerta-api -g "$AZURE_RESOURCE_GROUP" --query '[].{name:name,active:properties.active,health:properties.healthState,running:properties.runningState,details:properties.runningStateDetails,error:properties.provisioningError,image:properties.template.containers[0].image}' -o json
+          timeout 60 az containerapp logs show -n viaalerta-api -g "$AZURE_RESOURCE_GROUP" --type system --tail 60 --format text || true
+          timeout 60 az containerapp logs show -n viaalerta-api -g "$AZURE_RESOURCE_GROUP" --type console --container api --tail 60 --format text || true
