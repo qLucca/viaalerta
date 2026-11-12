@@ -2,9 +2,12 @@ import type { Metadata } from "next";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "ViaAlerta · Ruas mais seguras",
+  title: {
+    default: "ViaAlerta · Ruas mais seguras",
+    template: "%s · ViaAlerta",
+  },
   description:
-    "Um olhar para a rua. Uma cidade melhor para todos. Registre e acompanhe ocorrências nas vias públicas.",
+    "Um olhar para a rua. Uma cidade melhor para todos. Registre e acompanhe registros nas vias públicas.",
   icons: { icon: "/favicon.svg" },
 };
 export default function RootLayout({

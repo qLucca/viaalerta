@@ -1,6 +1,7 @@
 "use client";
+import { plural } from "@/lib/format";
+import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Shell, ThemeSwitch } from "@/components/layout/shell";
@@ -13,10 +14,9 @@ export default function Profile() {
   return <ProfileContent key={`${user?.id}:${user?.name}`} />;
 }
 function ProfileContent() {
-  const { user, demo, rename, logout } = useAuth();
+  const { user, demo, rename } = useAuth();
   const [name, setName] = useState(user?.name || "");
   const [busy, setBusy] = useState(false);
-  const router = useRouter();
   const { data = 0 } = useQuery({
     queryKey: ["mine", demo, user?.id],
     queryFn: () => countOccurrences(demo, { mine: true }),
@@ -88,36 +88,35 @@ function ProfileContent() {
         </section>
         <section className="panel form-section">
           <h2>Sua experiência</h2>
+          <Link className="text-link" href="/seguranca">
+            Segurança e verificação em duas etapas
+          </Link>
+          <Link className="text-link" href="/acesso-municipal">
+            Solicitar acesso institucional
+          </Link>
           <div className="preference">
             <div>
               <strong>Aparência</strong>
-              <p>Claro, escuro ou igual ao sistema.</p>
+              <p>No computador, escolha o tema no menu lateral.</p>
             </div>
+          </div>
+          <div className="compact-theme-preference">
             <ThemeSwitch />
           </div>
           <div className="preference">
             <div>
               <strong>
-                {data} contribuições {demo ? "de demonstração" : ""}
+                {plural(data, "registro")} {demo ? "de demonstração" : ""}
               </strong>
-              <p>Obrigado por olhar pela cidade.</p>
+              <Link className="text-link" href="/ocorrencias">
+                Acompanhar meus registros
+              </Link>
             </div>
           </div>
           <div className="info-box">
-            Guardamos apenas o necessário para sua conta e seus registros. A
-            localização solicitada se refere à ocorrência e só é coletada por
-            sua ação.
+            Guardamos apenas o necessário para sua conta e seus registros. Você
+            confirma o local do registro antes do envio.
           </div>
-          <Button
-            variant="outline"
-            onClick={() =>
-              logout()
-                .then(() => router.push("/"))
-                .catch((e) => toast.error(e.message))
-            }
-          >
-            Encerrar sessão
-          </Button>
         </section>
       </div>
     </Shell>

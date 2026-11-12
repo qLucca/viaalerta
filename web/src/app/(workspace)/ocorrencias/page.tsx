@@ -1,4 +1,6 @@
 "use client";
+import { plural } from "@/lib/format";
+import { use, Suspense } from "react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/providers";
@@ -6,9 +8,27 @@ import { Shell } from "@/components/layout/shell";
 import { RecordCard, Empty } from "@/components/occurrences";
 import { listOccurrences } from "@/lib/api/occurrences";
 import { statusLabels, type Status } from "@/types";
-export default function MyRecords() {
+export default function MyRecords({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  return (
+    <Suspense fallback={<p>Carregando registros…</p>}>
+      <Records searchParams={searchParams} />
+    </Suspense>
+  );
+}
+function Records({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const requested = use(searchParams).status;
   const { demo, user } = useAuth();
-  const [status, setStatus] = useState<Status | "">("");
+  const [status, setStatus] = useState<Status | "">(
+    requested && requested in statusLabels ? (requested as Status) : "",
+  );
   const [sort, setSort] = useState("recent");
   const [page, setPage] = useState(0);
   const {
@@ -31,13 +51,13 @@ export default function MyRecords() {
   const sorted = data.slice(0, 50);
   return (
     <Shell
-      title="Minhas ocorrências"
-      subtitle="Acompanhe cada contribuição e o caminho até a melhoria das ruas."
+      title="Meus registros"
+      subtitle="Consulte seus registros e acompanhe o status."
     >
       {demo && (
         <p className="muted mb-4">
-          Na demonstração, esta lista inclui os registros de exemplo e os
-          criados neste navegador.
+          Na demonstração, esta lista mostra os registros criados por você neste
+          navegador. Os exemplos continuam no mapa.
         </p>
       )}
       <div className="list-toolbar">
@@ -71,7 +91,9 @@ export default function MyRecords() {
             <option value="old">Mais antigas</option>
           </select>
         </label>
-        <span className="muted">{sorted.length} registros nesta página</span>
+        <span className="muted">
+          {plural(sorted.length, "registro")} nesta página
+        </span>
       </div>
       {isPending ? (
         <p role="status">Carregando seus registros…</p>
@@ -88,12 +110,12 @@ export default function MyRecords() {
         </div>
       ) : (
         <Empty
-          title="Sua próxima contribuição começa aqui."
-          description="Registre uma ocorrência ou altere o filtro para ver seus registros."
+          title="Você ainda não tem registros neste filtro."
+          description="Registre um problema ou altere o filtro para ver seus registros."
         />
       )}
-      {!error && (
-        <nav className="actions" aria-label="Páginas de ocorrências">
+      {!error && (page > 0 || data.length > 50) && (
+        <nav className="actions" aria-label="Páginas de registros">
           <button
             className="button button-outline"
             disabled={page === 0 || isPending}

@@ -4,9 +4,11 @@ import type { Analysis } from "@/types";
 export function DetectionImage({
   src,
   analysis,
+  showConfidence = true,
 }: {
   src: string;
   analysis?: Analysis;
+  showConfidence?: boolean;
 }) {
   return (
     <div
@@ -61,7 +63,9 @@ export function DetectionImage({
                   fill="#103b29"
                   fontWeight="700"
                 >
-                  buraco · {Math.round(d.confidence * 100)}%
+                  {showConfidence
+                    ? `buraco · ${Math.round(d.confidence * 100)}%`
+                    : "Possível buraco"}
                 </text>
               </g>
             );

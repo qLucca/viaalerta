@@ -1,417 +1,976 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Camera,
-  Upload,
-  ScanLine,
-  LocateFixed,
   Check,
+  Circle,
+  LocateFixed,
+  Upload,
+  AlertTriangle,
   ArrowRight,
-  ShieldCheck,
-  MapPin,
+  Share2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Shell } from "@/components/layout/shell";
 import { Button } from "@/components/ui/button";
 import { DetectionImage } from "@/components/detection/image";
 import { useAuth } from "@/components/providers";
+import { analyzeImage } from "@/lib/api/detection";
+import { listOccurrences } from "@/lib/api/occurrences";
 import {
-  analyzeImage,
-  validateImage,
-  imageDimensions,
-} from "@/lib/api/detection";
-import { createOccurrence } from "@/lib/api/occurrences";
+  findNearby,
+  registerPhoto,
+  supportRecord,
+} from "@/lib/api/registration";
+import { preparePhoto } from "@/lib/photo";
+import {
+  missingRegistration,
+  problemTypes,
+  type ProblemType,
+  type RegistrationData,
+} from "@/lib/registration";
+import { plural } from "@/lib/format";
+import { supabase } from "@/lib/supabase/client";
 import Map from "@/components/map/map";
 import type { Analysis } from "@/types";
+
+type Form = {
+  id: string;
+  file?: File;
+  preview: string;
+  width: number;
+  height: number;
+  gps?: [number, number];
+  analysis?: Analysis;
+  analysisError: string;
+  processing: boolean;
+  preparing: boolean;
+  reviewed: boolean;
+  answer: boolean | null;
+  point?: [number, number];
+  confirmed: boolean;
+  type: ProblemType;
+  notes: string;
+  danger: boolean;
+  consent: boolean;
+  duplicateOverride: boolean;
+  error: string;
+};
+function initialForm(): Form {
+  return {
+    id: crypto.randomUUID(),
+    preview: "",
+    width: 0,
+    height: 0,
+    analysisError: "",
+    processing: false,
+    preparing: false,
+    reviewed: false,
+    answer: null,
+    confirmed: false,
+    type: "buraco",
+    notes: "",
+    danger: false,
+    consent: false,
+    duplicateOverride: false,
+    error: "",
+  };
+}
+
 export default function Register() {
-  const { demo } = useAuth();
-  const router = useRouter();
-  const query = useQueryClient();
-  const [file, setFile] = useState<File>();
-  const [preview, setPreview] = useState("");
-  const [analysis, setAnalysis] = useState<Analysis>();
-  const [analyzing, setAnalyzing] = useState(false);
-  const [emptyDemo, setEmptyDemo] = useState(false);
-  const [point, setPoint] = useState<[number, number]>([-23.552, -46.65]);
-  const [confirmed, setConfirmed] = useState(false);
-  const [chosen, setChosen] = useState(false);
-  const [notes, setNotes] = useState("");
-  const [consent, setConsent] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [locating, setLocating] = useState(false);
-  const simulated = demo || !process.env.NEXT_PUBLIC_DETECTION_API_URL;
-  useEffect(() => {
-    return () => {
-      if (preview) URL.revokeObjectURL(preview);
-    };
-  }, [preview]);
-  async function choose(selected?: File) {
-    if (!selected) return;
+  return <RegistrationForm />;
+}
+function RegistrationForm() {
+  const { demo, user } = useAuth(),
+    cache = useQueryClient();
+  const [f, setForm] = useState<Form>(initialForm),
+    [saving, setSaving] = useState(false),
+    [locating, setLocating] = useState(false);
+  const [success, setSuccess] = useState<{
+    id: string;
+    simulated: boolean;
+  } | null>(null);
+  const [coordinates, setCoordinates] = useState({
+    latitude: "",
+    longitude: "",
+  });
+  const [example, setExample] = useState<"positive" | "negative" | "failure">(
+    "positive",
+  );
+  const [supporting, setSupporting] = useState("");
+  const locationGeneration = useRef(0),
+    generation = useRef(0),
+    sending = useRef(false),
+    photoInput = useRef<HTMLInputElement>(null);
+  const patch = (values: Partial<Form>) =>
+    setForm((previous) => ({ ...previous, ...values }));
+  useEffect(
+    () => () => {
+      if (f.preview) URL.revokeObjectURL(f.preview);
+    },
+    [f.preview],
+  );
+  const initial = useQuery({
+    queryKey: ["map-initial", demo || !supabase],
+    queryFn: () => listOccurrences(demo || !supabase, { limit: 500 }),
+    enabled: !!user,
+  });
+  const nearby = useQuery({
+    queryKey: ["nearby", demo, f.point?.[0], f.point?.[1], f.type],
+    queryFn: () => findNearby(f.point!, f.type, demo),
+    enabled: !!f.point && !!user,
+    retry: false,
+  });
+  const duplicateResolved =
+    !!f.point &&
+    !nearby.isPending &&
+    ((!nearby.error && !nearby.data?.length) || f.duplicateOverride);
+  const missing = missingRegistration({
+    photo: !!f.file,
+    processing: f.processing,
+    reviewed: f.reviewed,
+    location: !!f.point && f.confirmed,
+    duplicatesResolved: duplicateResolved,
+    consent: f.consent,
+  });
+  const currentStep = !f.file ? 0 : !f.reviewed ? 1 : !f.confirmed ? 2 : 3;
+
+  async function runAnalysis(file: File, type: ProblemType, ticket: number) {
+    if (type !== "buraco") {
+      if (ticket === generation.current)
+        patch({ processing: false, analysis: undefined, analysisError: "" });
+      return;
+    }
     try {
-      validateImage(selected);
-      const dimensions = await imageDimensions(selected);
-      if (dimensions.width * dimensions.height > 40_000_000)
-        throw new Error("Use uma imagem com até 40 megapixels.");
-      setFile(selected);
-      setPreview(URL.createObjectURL(selected));
-      setAnalysis(undefined);
-      setConfirmed(false);
-      setChosen(false);
-      setConsent(false);
-    } catch (e) {
-      toast.error((e as Error).message);
+      if (demo && example === "failure")
+        throw new Error(
+          "Falha de análise simulada. Você pode conferir a foto e continuar.",
+        );
+      if (!demo && !process.env.NEXT_PUBLIC_DETECTION_API_URL)
+        throw new Error(
+          "A análise não está disponível. Você pode conferir a foto e continuar.",
+        );
+      const analysis = await analyzeImage(file, demo, example === "negative");
+      if (ticket === generation.current)
+        patch({ analysis, processing: false, analysisError: "" });
+    } catch (error) {
+      if (ticket === generation.current)
+        patch({
+          analysis: undefined,
+          analysisError: (error as Error).message,
+          processing: false,
+        });
     }
   }
-  async function analyze() {
-    if (!file) return;
-    setAnalyzing(true);
+  async function choose(source?: File) {
+    if (!source || saving) return;
+    const ticket = ++generation.current;
+    locationGeneration.current++;
+    setLocating(false);
+    patch({
+      file: undefined,
+      preview: "",
+      analysis: undefined,
+      analysisError: "",
+      reviewed: false,
+      answer: null,
+      processing: true,
+      preparing: true,
+      confirmed: false,
+      point: undefined,
+      gps: undefined,
+      consent: false,
+      duplicateOverride: false,
+      error: "",
+    });
+    setCoordinates({ latitude: "", longitude: "" });
     try {
-      setAnalysis(await analyzeImage(file, demo, emptyDemo));
-      toast.success("Análise concluída. Confira o resultado na imagem.");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setAnalyzing(false);
+      const photo = await preparePhoto(source);
+      if (ticket !== generation.current) return;
+      patch({
+        file: photo.file,
+        preview: URL.createObjectURL(photo.file),
+        width: photo.width,
+        height: photo.height,
+        gps: photo.gps,
+        preparing: false,
+      });
+      await runAnalysis(photo.file, f.type, ticket);
+    } catch (error) {
+      if (ticket === generation.current)
+        patch({
+          error: (error as Error).message,
+          processing: false,
+          preparing: false,
+        });
     }
   }
-  function changePoint(next: [number, number]) {
-    setPoint(next);
-    setChosen(true);
-    setConfirmed(false);
+  function changeType(type: ProblemType) {
+    const ticket = ++generation.current;
+    patch({
+      type,
+      analysis: undefined,
+      analysisError: "",
+      reviewed: false,
+      answer: null,
+      consent: false,
+      duplicateOverride: false,
+    });
+    if (f.file) {
+      patch({ processing: type === "buraco" });
+      void runAnalysis(f.file, type, ticket);
+    }
+  }
+  function changePoint(point: [number, number]) {
+    locationGeneration.current++;
+    setLocating(false);
+    patch({
+      point,
+      confirmed: false,
+      consent: false,
+      duplicateOverride: false,
+    });
+    setCoordinates({ latitude: String(point[0]), longitude: String(point[1]) });
   }
   function locate() {
     if (!navigator.geolocation) {
-      toast.error("Geolocalização indisponível. Escolha o local no mapa.");
+      toast.error("Seu navegador não oferece localização. Clique no mapa.");
       return;
     }
+    const ticket = ++locationGeneration.current;
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        changePoint([position.coords.latitude, position.coords.longitude]);
+      (p) => {
+        if (ticket !== locationGeneration.current) return;
+        changePoint([p.coords.latitude, p.coords.longitude]);
         setLocating(false);
-        toast.info(
-          "Confira se este é o local da fotografia antes de confirmar.",
-        );
       },
       () => {
+        if (ticket !== locationGeneration.current) return;
         setLocating(false);
         toast.error(
-          "Localização indisponível ou negada. Clique no mapa para escolher o local.",
+          "Não foi possível acessar sua localização. Clique no mapa para escolher o local.",
         );
       },
       { timeout: 12000, enableHighAccuracy: true },
     );
   }
+  function useCoordinates() {
+    const lat = Number(coordinates.latitude),
+      lon = Number(coordinates.longitude);
+    if (
+      !coordinates.latitude.trim() ||
+      !coordinates.longitude.trim() ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lon) > 180
+    ) {
+      toast.error("Informe latitude e longitude válidas.");
+      return;
+    }
+    changePoint([lat, lon]);
+  }
   async function save() {
-    if (!file || !analysis || !confirmed || !consent) return;
+    if (missing || !f.file || !f.point || sending.current) return;
+    sending.current = true;
     setSaving(true);
+    patch({ error: "" });
     try {
-      const record = await createOccurrence(
-        file,
+      const analysis = f.analysis || {
+        image_width: f.width,
+        image_height: f.height,
+        detections: [],
+        simulated: false,
+      };
+      const feedback = f.analysis
+        ? analysis.detections.length > 0 === f.answer
+          ? "confirmed"
+          : "corrected"
+        : "not_verified";
+      const data: RegistrationData = {
+        id: f.id,
+        latitude: f.point[0],
+        longitude: f.point[1],
+        description: f.notes,
+        problem_type: f.type,
+        immediate_danger: f.danger,
+        analysis_state: f.analysis
+          ? "completed"
+          : f.type === "buraco"
+            ? "failed"
+            : "not_requested",
+        ai_feedback: feedback,
+        human_has_pothole: f.type === "buraco" ? f.answer : null,
         analysis,
-        ...point,
-        notes,
-        demo,
-      );
-      await query.invalidateQueries();
-      toast.success(
-        record.simulated
-          ? "Demonstração salva somente neste navegador."
-          : "Ocorrência registrada!",
-      );
-      if (record.simulated && !demo) {
-        toast.info(
-          "A análise simulada foi mantida localmente. Entre no modo demonstração para vê-la.",
-        );
-      } else router.push(`/ocorrencias/${record.id}`);
-    } catch (e) {
-      toast.error((e as Error).message);
+        consent: true,
+      };
+      const saved = await registerPhoto(f.file, data, demo);
+      setSuccess({ id: saved.id, simulated: !!saved.simulated });
+      void cache.invalidateQueries();
+    } catch (error) {
+      patch({ error: (error as Error).message });
     } finally {
+      sending.current = false;
       setSaving(false);
     }
   }
+  async function support(id: string) {
+    setSupporting(id);
+    try {
+      await supportRecord(id, demo);
+      toast.success(
+        demo
+          ? "Apoio de demonstração salvo neste navegador."
+          : "Seu apoio foi registrado.",
+      );
+      void nearby.refetch();
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setSupporting("");
+    }
+  }
+  async function share(id: string) {
+    try {
+      const url = `${location.origin}/ocorrencias/${id}`;
+      if (navigator.share)
+        await navigator.share({ title: "Registro no ViaAlerta", url });
+      else {
+        await navigator.clipboard.writeText(url);
+        toast.success("Link copiado.");
+      }
+    } catch (error) {
+      if ((error as Error).name !== "AbortError")
+        toast.error(
+          "Não foi possível compartilhar. Copie o endereço do registro.",
+        );
+    }
+  }
+  if (success)
+    return (
+      <Shell
+        title="Registro enviado"
+        subtitle="Confira o resumo e acompanhe o andamento."
+      >
+        <section
+          className="panel form-section registration-success"
+          role="status"
+        >
+          <Check size={32} />
+          <h2>Seu registro foi salvo</h2>
+          <p>
+            Número do registro: <strong>{success.id}</strong>
+          </p>
+          <p>{problemTypes[f.type]} · Local aproximado</p>
+          <p>{f.notes || "Sem observações adicionais."}</p>
+          <p>
+            {success.simulated
+              ? "Demonstração: foto e registro ficam neste navegador. A prefeitura não foi notificada."
+              : "O registro está disponível no mapa. Acompanhe esta página para consultar futuras atualizações. O atendimento depende da habilitação e atuação da prefeitura."}
+          </p>
+          <div className="actions">
+            <Button asChild>
+              <Link href={`/ocorrencias/${success.id}`}>
+                Acompanhar registro <ArrowRight size={16} />
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                generation.current++;
+                setForm(initialForm());
+                setSuccess(null);
+              }}
+            >
+              Registrar outro
+            </Button>
+            <Button
+              variant="outline"
+              disabled={success.simulated}
+              title={
+                success.simulated
+                  ? "Registros de demonstração só existem neste navegador"
+                  : "Compartilhar registro"
+              }
+              onClick={() => share(success.id)}
+            >
+              <Share2 size={16} />
+              Compartilhar
+            </Button>
+          </div>
+        </section>
+      </Shell>
+    );
   return (
     <Shell
-      title="Registrar uma ocorrência"
-      subtitle="Seu olhar é o primeiro passo. Fotografe, confira e compartilhe."
+      title="Registrar um problema"
+      subtitle="Escolha a foto, confira o resultado e confirme o local antes de enviar."
     >
-      <div className="steps">
-        {["Fotografia", "Análise da imagem", "Localização e envio"].map(
+      <ol className="registration-steps" aria-label="Etapas do registro">
+        {["Foto", "Conferir análise", "Local", "Revisar e enviar"].map(
           (label, i) => (
-            <div
-              className={
-                i === 0 || (i === 1 && file) || (i === 2 && analysis)
-                  ? "done"
-                  : ""
-              }
-              key={label}
-            >
-              <span>{i + 1}</span>
-              {label}
-            </div>
+            <li key={label} data-complete={i < currentStep}>
+              <a
+                href={`#register-step-${i + 1}`}
+                aria-current={i === currentStep ? "step" : undefined}
+              >
+                <span>{i < currentStep ? <Check size={16} /> : i + 1}</span>
+                {label}
+              </a>
+            </li>
           ),
         )}
-      </div>
+      </ol>
+      {f.error && (
+        <div className="alert" role="alert">
+          {f.error}
+        </div>
+      )}
       <div className="registration-grid">
         <div className="flow-column">
-          <section className="panel form-section">
-            <div className="step-heading">
-              <span>01</span>
-              <div>
-                <h2>Um retrato do problema</h2>
-                <p>Escolha uma foto nítida do buraco e da via ao redor.</p>
-              </div>
+          <section className="panel form-section" id="register-step-1">
+            <h2>1. Foto do problema</h2>
+            <p>
+              Escolha uma foto nítida. Evite rostos, placas e informações
+              pessoais. Não use o celular ao dirigir.
+            </p>
+            <div className="field">
+              <label htmlFor="registration-type">Tipo de problema</label>
+              <select
+                id="registration-type"
+                value={f.type}
+                disabled={saving || f.preparing}
+                onChange={(e) => changeType(e.target.value as ProblemType)}
+              >
+                {Object.entries(problemTypes).map(([value, label]) => (
+                  <option value={value} key={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
             </div>
+            {demo && (
+              <div className="field">
+                <label htmlFor="registration-example">
+                  Resultado de exemplo
+                </label>
+                <select
+                  id="registration-example"
+                  value={example}
+                  disabled={saving || f.processing}
+                  onChange={(e) => {
+                    setExample(e.target.value as typeof example);
+                    patch({
+                      file: undefined,
+                      preview: "",
+                      analysis: undefined,
+                      reviewed: false,
+                      confirmed: false,
+                      consent: false,
+                    });
+                  }}
+                >
+                  <option value="positive">Com sinalização de buraco</option>
+                  <option value="negative">Sem sinalização de buraco</option>
+                  <option value="failure">Falha da análise</option>
+                </select>
+              </div>
+            )}
             <div
               className="upload-zone"
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
-                if (!analyzing && !saving) choose(e.dataTransfer.files[0]);
+                void choose(e.dataTransfer.files[0]);
               }}
             >
-              <Upload size={27} />
+              <Upload size={25} />
               <strong>
-                {file
-                  ? file.name
-                  : "Arraste uma foto ou escolha do dispositivo"}
+                {f.preparing
+                  ? "Preparando a foto…"
+                  : f.file
+                    ? "Foto preparada para envio"
+                    : "Arraste a foto ou escolha do dispositivo"}
               </strong>
-              <span>JPG, PNG ou WebP · até 8 MB</span>
-              <div className="actions">
-                <label className="button button-primary" htmlFor="photo">
-                  Escolher imagem
-                  <input
-                    id="photo"
-                    className="sr-only"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    disabled={analyzing || saving}
-                    onChange={(e) => choose(e.target.files?.[0])}
-                  />
-                </label>
-                <label className="button button-outline" htmlFor="camera">
-                  <Camera size={17} /> Usar câmera
-                  <input
-                    id="camera"
-                    className="sr-only"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    capture="environment"
-                    disabled={analyzing || saving}
-                    onChange={(e) => choose(e.target.files?.[0])}
-                  />
-                </label>
-              </div>
+              <span>
+                JPG, PNG ou WebP · original de até 25 MB · reduzida para até
+                1600 pixels
+              </span>
+              <input
+                ref={photoInput}
+                hidden
+                type="file"
+                id="registration-photo"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={saving}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  void choose(file);
+                }}
+              />
+              <Button
+                variant="outline"
+                disabled={saving}
+                onClick={() => photoInput.current?.click()}
+              >
+                <Camera size={17} />
+                {f.file ? "Trocar foto" : "Escolher foto"}
+              </Button>
             </div>
-            {simulated && (
+            {demo && (
               <Button
                 variant="ghost"
-                disabled={analyzing || saving}
+                disabled={saving || f.processing}
                 onClick={async () => {
                   try {
                     const response = await fetch("/demo-road.jpg");
-                    if (!response.ok)
-                      throw new Error("Não foi possível abrir o exemplo.");
-                    await choose(
-                      new File(
-                        [await response.blob()],
-                        "exemplo-ilustrativo.jpg",
-                        { type: "image/jpeg" },
-                      ),
+                    if (!response.ok) throw new Error("Exemplo indisponível.");
+                    void choose(
+                      new File([await response.blob()], "exemplo.jpg", {
+                        type: "image/jpeg",
+                      }),
                     );
                   } catch (error) {
-                    toast.error((error as Error).message);
+                    patch({ error: (error as Error).message });
                   }
                 }}
               >
                 Usar foto ilustrativa de exemplo
               </Button>
             )}
-            {preview && <DetectionImage src={preview} analysis={analysis} />}
-            <div className="analysis-actions">
-              <div>
-                {simulated && (
+            {f.preview && (
+              <DetectionImage
+                src={f.preview}
+                analysis={f.analysis}
+                showConfidence={false}
+              />
+            )}
+          </section>
+          <section className="panel form-section" id="register-step-2">
+            <h2>2. Conferir a foto e a análise</h2>
+            {!f.file && !f.processing ? (
+              <p>Escolha uma foto na etapa 1 para continuar.</p>
+            ) : f.processing ? (
+              <p role="status">
+                {f.preparing
+                  ? "Reduzindo a foto e removendo metadados…"
+                  : "Analisando a imagem. Aguarde…"}
+              </p>
+            ) : (
+              <>
+                {f.analysis?.simulated && (
+                  <p className="demo-tag">
+                    Análise simulada: este resultado não é uma previsão real da
+                    IA.
+                  </p>
+                )}
+                {f.analysis ? (
                   <>
-                    <span className="demo-tag">DETECÇÃO SIMULADA</span>
+                    <p className="registration-question">
+                      {f.analysis.detections.length
+                        ? "Parece haver um buraco aqui. Está certo?"
+                        : "A IA não sinalizou um buraco. Você vê um buraco nesta foto?"}
+                    </p>
+                    <div className="actions">
+                      <Button
+                        disabled={saving}
+                        variant={f.answer === true ? "default" : "outline"}
+                        aria-pressed={f.reviewed && f.answer === true}
+                        onClick={() =>
+                          patch({
+                            answer: true,
+                            reviewed: true,
+                            consent: false,
+                          })
+                        }
+                      >
+                        Sim, há um buraco
+                      </Button>
+                      <Button
+                        disabled={saving}
+                        variant={f.answer === false ? "default" : "outline"}
+                        aria-pressed={f.reviewed && f.answer === false}
+                        onClick={() =>
+                          patch({
+                            answer: false,
+                            reviewed: true,
+                            consent: false,
+                          })
+                        }
+                      >
+                        {f.analysis.detections.length
+                          ? "Não, corrigir: não há buraco"
+                          : "Não há buraco"}
+                      </Button>
+                    </div>
+                    {f.reviewed && (
+                      <p role="status">
+                        {f.analysis.detections.length > 0 === f.answer
+                          ? "Sua conferência da foto foi registrada."
+                          : "Sua correção foi registrada. A indicação da IA não será tratada como confirmação humana."}
+                      </p>
+                    )}
+                    <details className="technical-details">
+                      <summary>Detalhes técnicos da análise</summary>
+                      <p>
+                        {plural(
+                          f.analysis.detections.length,
+                          "sinalização",
+                          "sinalizações",
+                        )}{" "}
+                        ·{" "}
+                        {Math.round(
+                          Math.max(
+                            0,
+                            ...f.analysis.detections.map((d) => d.confidence),
+                          ) * 100,
+                        )}
+                        % de confiança máxima.
+                      </p>
+                    </details>
+                  </>
+                ) : (
+                  <>
+                    <p role={f.analysisError ? "alert" : undefined}>
+                      {f.analysisError ||
+                        "A IA analisa apenas fotos de buracos. Confira a foto antes de enviar."}
+                    </p>
                     <label className="check-label">
                       <input
                         type="checkbox"
-                        checked={emptyDemo}
-                        disabled={analyzing || saving}
-                        onChange={(e) => {
-                          setEmptyDemo(e.target.checked);
-                          setAnalysis(undefined);
-                        }}
-                      />{" "}
-                      Simular imagem sem buracos
+                        checked={f.reviewed}
+                        disabled={saving}
+                        onChange={(e) =>
+                          patch({
+                            reviewed: e.target.checked,
+                            answer: f.type === "buraco" ? true : null,
+                            consent: false,
+                          })
+                        }
+                      />
+                      Conferi a foto e quero registrar este problema sem
+                      verificação da IA.
                     </label>
+                    {f.type === "buraco" && (
+                      <Button
+                        variant="outline"
+                        disabled={saving}
+                        onClick={() => {
+                          patch({
+                            processing: true,
+                            reviewed: false,
+                            answer: null,
+                          });
+                          void runAnalysis(
+                            f.file!,
+                            f.type,
+                            ++generation.current,
+                          );
+                        }}
+                      >
+                        Tentar análise novamente
+                      </Button>
+                    )}
                   </>
                 )}
-              </div>
-              <Button onClick={analyze} disabled={!file || analyzing || saving}>
-                <ScanLine size={17} />
-                {analyzing ? "Analisando…" : "Analisar imagem"}
+              </>
+            )}
+          </section>
+          <section className="panel form-section" id="register-step-3">
+            <h2>3. Local da foto</h2>
+            <p>
+              Clique no mapa para marcar onde a foto foi tirada. Sua localização
+              atual pode ser diferente do local do problema.
+            </p>
+            <div className="actions">
+              <Button
+                variant="outline"
+                onClick={locate}
+                disabled={locating || saving}
+              >
+                <LocateFixed size={16} />
+                {locating ? "Localizando…" : "Usar minha localização atual"}
               </Button>
+              {f.gps && (
+                <Button
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => changePoint(f.gps!)}
+                >
+                  Usar local da foto (GPS)
+                </Button>
+              )}
             </div>
-            {analysis && (
-              <div role="status" className="analysis-result">
-                <ShieldCheck size={23} />
-                <div>
-                  <strong>
-                    {analysis.detections.length
-                      ? `${analysis.detections.length} possível buraco identificado`
-                      : "Nenhum buraco identificado"}
-                  </strong>
-                  <p>
-                    {analysis.simulated
-                      ? "Exemplo visual simulado; não é uma previsão do YOLO."
-                      : "Detecção da IA. O registro ainda depende da sua confirmação."}{" "}
-                    {!analysis.detections.length &&
-                      "Você ainda pode registrar a ocorrência após conferir a foto."}
+            <div className="location-map" aria-busy={saving}>
+              <Map
+                initialRecords={initial.data}
+                initialReady={!initial.isPending}
+                point={f.point}
+                onPoint={saving ? undefined : changePoint}
+              />
+            </div>
+            <p role="status">
+              {f.point
+                ? f.confirmed
+                  ? "Local aproximado · confirmado"
+                  : "Local aproximado · confira e confirme"
+                : "Nenhum local selecionado"}
+            </p>
+            <details className="technical-details">
+              <summary>Detalhes técnicos da localização</summary>
+              <p>
+                Para alterar o local, informe as duas coordenadas e clique em
+                Usar coordenadas. O mapa mostra o ponto que será enviado.
+              </p>
+              <div className="coordinate-fields">
+                <label>
+                  Latitude
+                  <input
+                    type="number"
+                    step="any"
+                    value={coordinates.latitude}
+                    disabled={saving}
+                    onChange={(e) =>
+                      setCoordinates({
+                        ...coordinates,
+                        latitude: e.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Longitude
+                  <input
+                    type="number"
+                    step="any"
+                    value={coordinates.longitude}
+                    disabled={saving}
+                    onChange={(e) =>
+                      setCoordinates({
+                        ...coordinates,
+                        longitude: e.target.value,
+                      })
+                    }
+                  />
+                </label>
+              </div>
+              <Button
+                variant="outline"
+                disabled={saving}
+                onClick={useCoordinates}
+              >
+                Usar coordenadas
+              </Button>
+            </details>
+            <Button
+              variant={f.confirmed ? "default" : "outline"}
+              disabled={!f.point || saving}
+              onClick={() => patch({ confirmed: true })}
+            >
+              <Check size={16} />
+              {f.confirmed
+                ? "Local confirmado"
+                : "Confirmar local da fotografia"}
+            </Button>
+            {f.point && (
+              <div className="nearby-records">
+                <h3>Alguém já avisou aqui?</h3>
+                {nearby.isPending ? (
+                  <p role="status">
+                    Buscando registros abertos a até 30 metros…
                   </p>
-                </div>
+                ) : nearby.error ? (
+                  <div role="alert">
+                    <p>Não foi possível consultar os registros próximos.</p>
+                    <Button variant="outline" onClick={() => nearby.refetch()}>
+                      Tentar novamente
+                    </Button>
+                  </div>
+                ) : nearby.data?.length ? (
+                  <>
+                    <p>
+                      Confira se algum destes registros mostra o mesmo problema.
+                      Você pode apoiar um registro existente.
+                    </p>
+                    {nearby.data.map((record) => (
+                      <article className="nearby-card" key={record.id}>
+                        {/* Foto e distância ajudam a distinguir problemas vizinhos. */}
+                        <Image
+                          unoptimized
+                          src={record.image_url || record.image_path}
+                          alt="Foto de um problema próximo"
+                          width={96}
+                          height={72}
+                        />
+                        <div>
+                          <strong>
+                            {problemTypes[record.problem_type || "buraco"]}
+                          </strong>
+                          <p>
+                            A aproximadamente {Math.round(record.distance_m)}{" "}
+                            metros ·{" "}
+                            {plural(record.support_count || 0, "apoio")}
+                          </p>
+                          <Link
+                            className="text-link"
+                            href={`/ocorrencias/${record.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Ver registro (nova aba)
+                          </Link>
+                          <Button
+                            variant="outline"
+                            disabled={!!supporting || saving}
+                            onClick={() => support(record.id)}
+                          >
+                            {supporting === record.id
+                              ? "Salvando apoio…"
+                              : "Apoiar este registro"}
+                          </Button>
+                        </div>
+                      </article>
+                    ))}
+                  </>
+                ) : (
+                  <p>
+                    Nenhum registro aberto deste tipo foi encontrado a até 30
+                    metros.
+                  </p>
+                )}
+                {(nearby.error || !!nearby.data?.length) && (
+                  <label className="check-label">
+                    <input
+                      type="checkbox"
+                      checked={f.duplicateOverride}
+                      disabled={saving || nearby.isPending}
+                      onChange={(e) =>
+                        patch({
+                          duplicateOverride: e.target.checked,
+                          consent: false,
+                        })
+                      }
+                    />
+                    {nearby.error
+                      ? "Quero enviar mesmo sem a consulta de registros próximos."
+                      : "É outro problema. Quero criar um novo registro."}
+                  </label>
+                )}
               </div>
             )}
           </section>
-          <section className="panel form-section">
-            <div className="step-heading">
-              <span>02</span>
-              <div>
-                <h2>Onde a foto foi tirada?</h2>
-                <p>
-                  Clique no mapa ou arraste o marcador até o local exato da
-                  ocorrência.
-                </p>
-              </div>
-            </div>
-            <div className="location-warning">
-              O ponto inicial é apenas uma referência em São Paulo. A
-              localização atual pode ser diferente do local da foto.
-            </div>
-            <Button variant="outline" onClick={locate} disabled={locating}>
-              <LocateFixed size={16} />
-              {locating ? "Localizando…" : "Usar minha localização atual"}
-            </Button>
-            <div className="location-map">
-              <Map point={point} onPoint={changePoint} />
-            </div>
-            <div className="coordinate-fields">
-              <label>
-                Latitude
-                <input
-                  aria-label="Latitude"
-                  type="number"
-                  step="any"
-                  value={point[0]}
-                  onChange={(e) => {
-                    const n = Number(e.target.value);
-                    if (Number.isFinite(n) && Math.abs(n) <= 90)
-                      changePoint([n, point[1]]);
-                  }}
-                />
-              </label>
-              <label>
-                Longitude
-                <input
-                  aria-label="Longitude"
-                  type="number"
-                  step="any"
-                  value={point[1]}
-                  onChange={(e) => {
-                    const n = Number(e.target.value);
-                    if (Number.isFinite(n) && Math.abs(n) <= 180)
-                      changePoint([point[0], n]);
-                  }}
-                />
-              </label>
-            </div>
-            <Button
-              variant={confirmed ? "default" : "outline"}
-              disabled={!chosen || saving}
-              onClick={() => setConfirmed(true)}
-            >
-              <Check size={17} />
-              {confirmed
-                ? "Localização confirmada"
-                : "Confirmar local da fotografia"}
-            </Button>
+          <section className="panel form-section" id="register-step-4">
+            <h2>4. Revisar e enviar</h2>
+            <label className="field">
+              Observação (opcional)
+              <textarea
+                value={f.notes}
+                rows={4}
+                maxLength={1000}
+                disabled={saving}
+                onChange={(e) =>
+                  patch({ notes: e.target.value, consent: false })
+                }
+                aria-describedby="registration-notes-help"
+              />
+            </label>
+            <p id="registration-notes-help" className="registration-help">
+              Descreva um ponto de referência ou uma informação útil. A
+              observação aparece nos detalhes; não é o título do registro.{" "}
+              {f.notes.length}/1000 caracteres.
+            </p>
+            <label className="check-label">
+              <input
+                type="checkbox"
+                checked={f.danger}
+                disabled={saving}
+                onChange={(e) =>
+                  patch({ danger: e.target.checked, consent: false })
+                }
+              />
+              Oferece perigo imediato?
+            </label>
+            <p className="registration-help">
+              Esta indicação ajuda na triagem e não substitui um serviço de
+              emergência.
+            </p>
+            <label className="check-label consent">
+              <input
+                type="checkbox"
+                checked={f.consent}
+                disabled={saving}
+                onChange={(e) => patch({ consent: e.target.checked })}
+              />
+              Concordo que a foto, o local e a observação fiquem públicos no
+              mapa.
+            </label>
           </section>
         </div>
-        <aside className="panel summary-panel">
-          <span className="eyebrow">QUASE PRONTO</span>
-          <h2>Seu registro, em resumo</h2>
-          <p>Confira as informações antes de compartilhar com a comunidade.</p>
-          <div className="summary-item">
-            <Camera size={18} />
-            <div>
-              <strong>Fotografia</strong>
-              <span>{file ? file.name : "Nenhuma imagem enviada"}</span>
-            </div>
-            {file && <Check size={16} />}
-          </div>
-          <div className="summary-item">
-            <ScanLine size={18} />
-            <div>
-              <strong>
-                Análise {analysis?.simulated ? "simulada" : "da imagem"}
-              </strong>
-              <span>
-                {analysis
-                  ? `${analysis.detections.length} detecção · ${Math.round(Math.max(0, ...analysis.detections.map((d) => d.confidence)) * 100)}% maior confiança`
-                  : "Aguardando análise"}
-              </span>
-            </div>
-          </div>
-          <div className="summary-item">
-            <MapPin size={18} />
-            <div>
-              <strong>Localização</strong>
-              <span>
-                {confirmed
-                  ? `${point[0].toFixed(5)}, ${point[1].toFixed(5)}`
-                  : "Confirme o ponto no mapa"}
-              </span>
-            </div>
-            {confirmed && <Check size={16} />}
-          </div>
-          <label className="field">
-            Observações <span className="muted">(opcional)</span>
-            <textarea
-              value={notes}
-              maxLength={1000}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Um ponto de referência pode ajudar…"
-              rows={4}
-            />
-          </label>
-          <small className="muted">
-            A data será registrada no envio. Evite nomes, rostos, placas ou
-            informações pessoais.
-          </small>
-          <label className="check-label consent">
-            <input
-              type="checkbox"
-              checked={consent}
-              onChange={(e) => setConsent(e.target.checked)}
-            />
-            Confirmo o local e autorizo a exibição pública da foto, das
-            observações e do ponto da ocorrência.
-          </label>
+        <aside
+          className="panel summary-panel registration-summary"
+          aria-label="Resumo do registro"
+        >
+          <h2>
+            {!f.file
+              ? "Falta a foto"
+              : !f.reviewed
+                ? "Falta conferir a foto"
+                : !f.confirmed
+                  ? "Falta confirmar o local"
+                  : missing
+                    ? "Revise antes de enviar"
+                    : "Pronto para enviar"}
+          </h2>
+          <p>
+            {problemTypes[f.type]} ·{" "}
+            {f.point ? "Local aproximado" : "Local ainda não escolhido"}
+          </p>
+          <ul className="registration-checklist">
+            {[
+              [!!f.file, "Foto preparada"],
+              [f.reviewed, "Foto e análise conferidas"],
+              [f.confirmed, "Local confirmado"],
+              [duplicateResolved, "Registros próximos conferidos"],
+              [f.consent, "Publicação autorizada"],
+            ].map(([ok, label]) => (
+              <li key={String(label)}>
+                {ok ? <Check size={18} /> : <Circle size={18} />}
+                <span>
+                  {label}: {ok ? "OK" : "pendente"}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p id="registration-missing" role="status">
+            {saving
+              ? "Enviando o registro. Aguarde…"
+              : missing || "Confira o resumo e envie quando estiver pronto."}
+          </p>
           <Button
             className="w-full"
-            disabled={!analysis || !confirmed || !consent || saving}
+            disabled={!!missing || saving}
             onClick={save}
+            aria-describedby="registration-missing"
           >
-            {saving ? "Registrando…" : "Registrar ocorrência"}
+            {saving ? "Enviando…" : "Registrar problema"}
             <ArrowRight size={17} />
           </Button>
-          <p className="save-note">
-            {simulated
-              ? "Demonstração: salva apenas neste navegador."
-              : "Sua contribuição ficará disponível no mapa público."}
+          <p className="registration-help">
+            {demo
+              ? "Demonstração: o envio fica apenas neste navegador."
+              : "A foto é publicada sem os metadados originais. Você pode acompanhar o registro após o envio."}
           </p>
+          {f.analysisError && (
+            <p>
+              <AlertTriangle size={16} className="inline" />O registro será
+              marcado como não verificado pela IA.
+            </p>
+          )}
         </aside>
       </div>
     </Shell>

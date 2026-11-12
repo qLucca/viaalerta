@@ -149,9 +149,12 @@ Configure `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` e
 `EXPO_PUBLIC_DETECTION_API_URL`. A API do Android exige HTTPS. As variáveis públicas
 entram no binário; o APK existente não recebe alterações de URL automaticamente.
 
-O APK em `distribuicao/ViaAlerta-Android-1.0.0.apk` é uma versão anterior com assinatura
-de teste. O próximo APK deve ser gerado somente depois de validar a URL definitiva
-da API e autorizar essa etapa. Não é necessário gerar APK para revisar o código.
+O APK local em `distribuicao/ViaAlerta-Android-1.0.1.apk` usa a API e a web da Azure.
+Ele mantém a assinatura de teste da versão 1.0.0 e o pacote `com.viaalerta.app`, com
+código de versão 2. A pasta de distribuição fica fora do Git. A compilação e a assinatura
+foram verificadas; a instalação e o fluxo completo ainda precisam de teste no aparelho.
+Para distribuição de produção, configure uma chave de assinatura própria e revise as
+vulnerabilidades das dependências. Não é necessário gerar APK para revisar o código.
 
 ## Supabase e modo demonstração
 
@@ -190,6 +193,66 @@ avaliação estão em [notebooks/README.md](notebooks/README.md).
 
 Essas métricas são do arquivo de avaliação atual. A acurácia de presença por imagem
 não mede a qualidade da localização das caixas.
+
+## Fluxo de registro na web
+
+O registro segue quatro etapas: foto, conferência humana, local e revisão antes
+do envio. Fotos JPG, PNG e WebP são reduzidas no navegador para até 1600 pixels.
+HEIC fica fora desta etapa. GPS do EXIF é oferecido como sugestão; o usuário
+precisa escolher e confirmar o ponto. A localização é apresentada como
+“Local aproximado”, sem consulta a um serviço externo de endereço.
+
+A análise de buracos começa automaticamente. O usuário pode confirmar ou
+corrigir o resultado; em caso de falha, pode continuar sem verificação da IA.
+Outros tipos de problema passam pela conferência humana. Observações são texto
+do detalhe, não o título do registro.
+
+O endpoint web `/api/registrations` valida a sessão e a foto, remove metadados e
+preserva o feedback. Apoios são únicos por usuário. Registros abertos do mesmo
+tipo a até 30 metros são sugeridos para evitar duplicatas. O banco limita os
+envios a cinco em dez minutos e vinte em 24 horas; denúncias também têm limite.
+Esses limites dependem da migração do fluxo de registro.
+
+Antes de publicar esta versão, teste as migrações locais pendentes em um banco
+isolado e valide o envio com sessão real. O esquema base deve existir. Gere um
+pacote atômico com `node infra/preparar-migracao.mjs --from=1`; use `--from=2`
+se a migração 001 já estiver instalada, ou `--from=3` se 001 e 002 já estiverem
+instaladas. O arquivo gerado é `supabase/implantacao.local.sql`. O script apenas
+gera o arquivo: não conecta ao banco nem publica. Não instale a migração 001
+isoladamente nesta versão; a 003 restringe os acessos institucionais antigos.
+As migrações SQL continuam fora do Git; compartilhe-as separadamente e de forma
+privada com quem administra o banco. Os recursos novos exigem essa atualização.
+
+## Acompanhamento e acesso municipal
+
+O cidadão acompanha comentários, histórico, previsão e foto de conclusão. Pode
+editar a observação ou cancelar um registro próprio enquanto ainda estiver
+reportado. Cancelar retira o registro do mapa público, preservando a lista pessoal.
+
+Agentes e gestores solicitam acesso pelo portal com uma conta institucional
+confirmada de domínio `.gov.br`. A solicitação não concede permissões: um
+administrador aprova o município e o perfil. Agentes atuam somente no município
+atribuído. Gestores e administradores precisam verificar MFA em `/seguranca`;
+o banco também exige essa verificação. O primeiro administrador é preparado por
+um operador com `infra/preparar-perfis.mjs`, usando uma conta real já confirmada.
+Nenhuma conta fictícia ou senha padrão é criada pelo script.
+
+O atendimento exige comentário e controla mudanças concorrentes. Agendar exige
+previsão; rejeitar exige motivo; concluir exige uma foto posterior. Comentários
+de andamento são públicos. Alterações geram auditoria e notificações no portal;
+os e-mails ficam em uma fila que depende de um serviço de envio configurado.
+Ocultar um registro retira sua exibição pública, mas não apaga URLs de fotos já
+publicadas. A remoção desses arquivos deve ser tratada pelo administrador.
+
+O painel separa totais pessoais e públicos. O mapa tem filtros por situação,
+tipo, período e autoria, com lista navegável por teclado. Gestores e
+administradores com MFA podem exportar a fila autorizada em CSV. Esta etapa
+prioriza a web; a versão Android precisa ser atualizada e validada antes de
+usar os novos perfis institucionais.
+
+O modo demonstração guarda fotos e registros apenas no navegador. Ele não
+notifica a prefeitura. A tela de sucesso não promete atendimento ou envio de
+e-mail sem um serviço municipal efetivamente habilitado.
 
 ## Verificação
 

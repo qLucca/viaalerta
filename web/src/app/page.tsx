@@ -239,7 +239,7 @@ export default function Home() {
                 n: "03",
                 icon: MapPin,
                 title: "Coloque no mapa",
-                text: "Registre a ocorrência e acompanhe o status em um mapa aberto à comunidade.",
+                text: "Registre o problema e acompanhe o status em um mapa aberto à comunidade.",
               },
             ].map(({ n, icon: Icon, title, text }) => (
               <article key={n}>

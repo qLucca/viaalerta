@@ -1,18 +1,23 @@
 import type { Occurrence } from "@/types";
-const centers = [
-  [-23.553, -46.655],
-  [-23.548, -46.646],
-  [-23.557, -46.641],
-  [-23.563, -46.651],
-  [-23.55, -46.635],
-  [-23.54, -46.65],
-  [-23.56, -46.665],
-  [-23.545, -46.663],
-  [-23.568, -46.64],
-  [-23.535, -46.642],
-  [-23.552, -46.671],
-  [-23.57, -46.658],
+import { DEFAULT_CITY } from "./location.ts";
+const offsets = [
+  [0, 0],
+  [0.004, 0.006],
+  [-0.004, 0.008],
+  [-0.008, 0],
+  [0.002, 0.012],
+  [0.012, 0.004],
+  [-0.006, -0.01],
+  [0.008, -0.008],
+  [-0.01, 0.01],
+  [0.016, 0.012],
+  [0, -0.016],
+  [-0.014, -0.006],
 ];
+const centers = offsets.map(([latitude, longitude]) => [
+  DEFAULT_CITY.center[0] + latitude,
+  DEFAULT_CITY.center[1] + longitude,
+]);
 const descriptions = [
   "Desnível próximo à faixa de pedestres.",
   "Buraco na pista, próximo ao cruzamento.",

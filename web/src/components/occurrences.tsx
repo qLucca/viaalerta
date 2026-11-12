@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { problemTypes } from "@/lib/registration";
 import Image from "next/image";
 import { ArrowUpRight, MapPin, ImageOff } from "lucide-react";
 import { statusLabels, type Occurrence, type Status } from "@/types";
@@ -24,7 +25,13 @@ export function RecordCard({ record }: { record: Occurrence }) {
           alt="Via registrada"
           loading="lazy"
         />
-        <StatusBadge status={record.status} />
+        {record.cancelled_at ? (
+          <span className="status-badge">Cancelado pelo autor</span>
+        ) : record.hidden_at ? (
+          <span className="status-badge">Oculto para revisão</span>
+        ) : (
+          <StatusBadge status={record.status} />
+        )}
         {record.simulated && <span className="record-demo">SIMULADO</span>}
       </div>
       <div className="record-body">
@@ -33,23 +40,19 @@ export function RecordCard({ record }: { record: Occurrence }) {
           <time>{dateLabel(record.created_at)}</time>
         </div>
         <h3>
-          {record.description || "Ocorrência registrada"}
+          {problemTypes[record.problem_type || "buraco"]} informado
           <ArrowUpRight size={17} />
         </h3>
         <div className="record-location">
           <MapPin size={13} />
-          {record.latitude.toFixed(3)}, {record.longitude.toFixed(3)}{" "}
-          <span>
-            · {record.detection_count}{" "}
-            {record.detection_count === 1 ? "detecção" : "detecções"}
-          </span>
+          Local aproximado
         </div>
       </div>
     </Link>
   );
 }
 export function Empty({
-  title = "Nenhuma ocorrência por aqui.",
+  title = "Nenhum registro encontrado.",
   description = "Os novos registros aparecerão neste espaço.",
 }: {
   title?: string;

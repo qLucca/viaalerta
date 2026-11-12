@@ -3,7 +3,4 @@ import { twMerge } from "tailwind-merge";
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
-export const dateLabel = (date: string) =>
-  new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(
-    new Date(date),
-  );
+export { dateLabel, plural } from "./format.ts";

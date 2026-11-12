@@ -34,6 +34,7 @@ yarn-error.*
 /api/.env.example
 /docs/AZURE.md
 /supabase/*.sql
+/supabase/migrations/
 *.pem
 *.key
 *.p8
@@ -43,6 +44,7 @@ yarn-error.*
 *.mobileprovision
 credentials.json
 infra/azure.local.json
+infra/acessos.local.json
 *.bak
 *.old
 *.dump

@@ -8,24 +8,28 @@ import {
   Plus,
   ClipboardList,
   UserRound,
-  ArrowUpRight,
   LogOut,
   Sun,
   Moon,
   Monitor,
   Route,
   ChevronRight,
+  Bell,
+  Building2,
+  ShieldCheck,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/components/providers";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase/client";
+import { roleLabels } from "@/lib/workflow";
+import { useRole } from "@/lib/use-role";
 const links = [
   { href: "/dashboard", label: "Visão geral", icon: LayoutDashboard },
   { href: "/mapa", label: "Mapa colaborativo", icon: Map },
-  { href: "/registrar", label: "Registrar buraco", icon: Plus },
-  { href: "/ocorrencias", label: "Minhas ocorrências", icon: ClipboardList },
+  { href: "/registrar", label: "Registrar um problema", icon: Plus },
+  { href: "/ocorrencias", label: "Meus registros", icon: ClipboardList },
   { href: "/perfil", label: "Meu perfil", icon: UserRound },
 ];
 export function Logo() {
@@ -44,9 +48,13 @@ const subscribeToHydration = () => () => {};
 export function ThemeSwitch() {
   const { theme, setTheme } = useTheme();
   // A preferência salva só pode marcar um botão depois da hidratação.
-  const hydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false);
+  const hydrated = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
   return (
-    <div className="theme-switch" aria-label="Preferência de tema">
+    <div className="theme-switch" role="group" aria-label="Preferência de tema">
       {[
         { value: "light", label: "Claro", icon: Sun },
         { value: "dark", label: "Escuro", icon: Moon },
@@ -77,6 +85,17 @@ export function Shell({
   publicMap?: boolean;
 }) {
   const { user, loading, demo, logout } = useAuth();
+  const { role, staff, needsMfa } = useRole();
+  const navigation = [
+    ...links,
+    { href: "/notificacoes", label: "Notificações", icon: Bell },
+    ...(staff || needsMfa
+      ? [{ href: "/gestao", label: "Gestão da prefeitura", icon: Building2 }]
+      : []),
+    ...(role === "admin"
+      ? [{ href: "/administracao", label: "Administração", icon: ShieldCheck }]
+      : []),
+  ];
   const pathname = usePathname();
   const router = useRouter();
   useEffect(() => {
@@ -85,7 +104,7 @@ export function Shell({
   if (loading || (!user && !publicMap))
     return (
       <div className="screen-loading">
-        <span className="spinner" /> Preparando sua experiência…
+        <span className="spinner" /> Carregando sua conta…
       </div>
     );
   return (
@@ -96,11 +115,12 @@ export function Shell({
       <aside className="sidebar">
         <Logo />
         <div className="workspace-label">ESPAÇO COLABORATIVO</div>
-        <nav>
-          {links.map(({ href, label, icon: Icon }) => (
+        <nav aria-label="Menu principal">
+          {navigation.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
+              aria-current={pathname === href ? "page" : undefined}
               className={`nav-link ${pathname === href || (href === "/ocorrencias" && pathname.startsWith("/ocorrencias/")) ? "active" : ""}`}
             >
               <Icon size={19} />
@@ -112,13 +132,6 @@ export function Shell({
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="impact-note">
-            <span className="status-dot" /> Cada registro faz diferença.
-            <p>Juntos, enxergamos o caminho para uma cidade melhor.</p>
-            <Link href="/registrar">
-              Faça parte <ArrowUpRight size={14} />
-            </Link>
-          </div>
           <ThemeSwitch />
           <div className="sidebar-user">
             <span className="avatar">
@@ -134,20 +147,7 @@ export function Shell({
                     : "Acesso público"}
               </small>
             </div>
-            {user ? (
-              <button
-                aria-label="Sair"
-                onClick={() =>
-                  logout()
-                    .then(() => router.push("/"))
-                    .catch((e) => toast.error(e.message))
-                }
-              >
-                <LogOut size={17} />
-              </button>
-            ) : (
-              <Link href="/login">Entrar</Link>
-            )}
+            {!user && <Link href="/login">Entrar</Link>}
           </div>
         </div>
       </aside>
@@ -156,14 +156,30 @@ export function Shell({
           <div className="mobile-logo">
             <Logo />
           </div>
-          <div className="breadcrumb">
-            ViaAlerta <ChevronRight size={13} />
-            <span>{title}</span>
-          </div>
+          {pathname.startsWith("/ocorrencias/") ? (
+            <nav className="breadcrumb" aria-label="Localização na navegação">
+              <Link href="/ocorrencias">Meus registros</Link>
+              <ChevronRight size={13} aria-hidden="true" />
+              <span aria-current="page">Detalhes do registro</span>
+            </nav>
+          ) : (
+            <span className="topbar-name">ViaAlerta</span>
+          )}
           <div className="topbar-right">
-            <span className="live-label">
-              <span className="status-dot" /> Uma cidade, muitos olhares
-            </span>
+            {role !== "cidadao" && (
+              <span className="role-badge">
+                {roleLabels[role]}
+                {needsMfa && <Link href="/seguranca">Verificar sessão</Link>}
+              </span>
+            )}
+            <Link
+              href="/notificacoes"
+              className="notification-link"
+              aria-label="Abrir notificações"
+              title="Notificações"
+            >
+              <Bell size={20} />
+            </Link>
             <Link
               href="/perfil"
               className="avatar small"
@@ -171,28 +187,39 @@ export function Shell({
             >
               {user?.name[0]?.toUpperCase() || "V"}
             </Link>
+            {user && (
+              <button
+                className="notification-link"
+                aria-label="Sair da conta"
+                title="Sair da conta"
+                onClick={() =>
+                  logout()
+                    .then(() => router.push("/"))
+                    .catch((e) => toast.error(e.message))
+                }
+              >
+                <LogOut size={17} />
+              </button>
+            )}
           </div>
         </header>
         <main id="main" className="main-content">
           {(demo || (!user && !supabase)) && (
             <div className="demo-banner">
               <span className="demo-pill">DEMO</span> Ambiente de demonstração.
-              Ocorrências e análises são simuladas; novos registros ficam neste
+              Registros e análises são simulados; novos registros ficam neste
               navegador.
             </div>
           )}
           <div className="page-heading">
             <div>
-              <div className="eyebrow">
-                CUIDAR DA CIDADE COMEÇA COM UM OLHAR
-              </div>
               <h1>{title}</h1>
               <p>{subtitle}</p>
             </div>
             {pathname !== "/registrar" && (
               <Button asChild>
                 <Link href="/registrar">
-                  <Plus size={18} /> Registrar buraco
+                  <Plus size={18} /> Registrar um problema
                 </Link>
               </Button>
             )}
@@ -200,7 +227,7 @@ export function Shell({
           {children}
         </main>
         <footer className="app-footer">
-          ViaAlerta <span>Conectando pessoas. Melhorando caminhos.</span>
+          ViaAlerta <span>Registros de problemas nas vias públicas.</span>
           <span>Projeto colaborativo · MVP</span>
         </footer>
       </div>
@@ -215,9 +242,9 @@ export function Shell({
             <span>
               {label === "Mapa colaborativo"
                 ? "Mapa"
-                : label === "Minhas ocorrências"
+                : label === "Meus registros"
                   ? "Registros"
-                  : label === "Registrar buraco"
+                  : label === "Registrar um problema"
                     ? "Registrar"
                     : "Início"}
             </span>

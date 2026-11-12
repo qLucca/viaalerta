@@ -1,14 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import {
-  MapPin,
-  Clock3,
-  ScanLine,
-  Check,
-  ArrowUpRight,
-  ArrowRight,
-} from "lucide-react";
+import { MapPin, Clock3, ScanLine, Check, ArrowUpRight } from "lucide-react";
 import { Shell } from "@/components/layout/shell";
 import { useAuth } from "@/components/providers";
 import { listOccurrences, occurrenceSummary } from "@/lib/api/occurrences";
@@ -16,163 +9,148 @@ import Map from "@/components/map/map";
 import { RecordCard, Empty } from "@/components/occurrences";
 export default function Dashboard() {
   const { demo, user } = useAuth();
-  const {
-    data: result,
-    isPending,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ["occurrences", demo],
+  const mine = useQuery({
+    queryKey: ["dashboard-mine", user?.id, demo],
+    enabled: !!user,
     queryFn: async () => {
       const [records, summary] = await Promise.all([
-        listOccurrences(demo, { limit: 100 }),
+        listOccurrences(demo, { mine: true, limit: 3 }),
+        occurrenceSummary(demo, { mine: true }),
+      ]);
+      return { records, summary };
+    },
+  });
+  const community = useQuery({
+    queryKey: ["dashboard-community", demo],
+    enabled: !!user,
+    queryFn: async () => {
+      const [records, summary] = await Promise.all([
+        listOccurrences(demo, { limit: 500 }),
         occurrenceSummary(demo),
       ]);
       return { records, summary };
     },
-    enabled: !!user,
   });
-  const data = result?.records || [];
-  const summary = result?.summary || {
-    total: 0,
-    pendente: 0,
-    em_analise: 0,
-    resolvido: 0,
-  };
-  const stats = [
+  const summary = mine.data?.summary;
+  const cards = [
     {
-      label: "Ocorrências registradas",
-      value: summary.total,
+      label: "Todos os meus registros",
+      value: summary?.total,
+      status: "",
       icon: MapPin,
-      note: "No mapa colaborativo",
-      color: "green",
     },
     {
-      label: "Reportadas",
-      value: summary.pendente,
+      label: "Reportados",
+      value: summary?.pendente,
+      status: "pendente",
       icon: Clock3,
-      note: "Aguardando análise",
-      color: "red",
     },
     {
       label: "Em análise",
-      value: summary.em_analise,
+      value: summary?.em_analise,
+      status: "em_analise",
       icon: ScanLine,
-      note: "Em acompanhamento",
-      color: "orange",
     },
     {
-      label: "Resolvidas",
-      value: summary.resolvido,
+      label: "Resolvidos",
+      value: summary?.resolvido,
+      status: "resolvido",
       icon: Check,
-      note: "Caminhos mais seguros",
-      color: "green",
     },
   ];
   return (
     <Shell
       title="Visão geral"
-      subtitle={`Olá, ${user?.name.split(" ")[0] || "colaborador"}. Seu olhar pode transformar o caminho de muita gente.`}
+      subtitle={`Olá, ${user?.name.split(" ")[0] || "colaborador"}. Acompanhe seus registros e consulte a comunidade.`}
     >
-      {error && (
-        <div role="alert" className="alert">
-          Não foi possível carregar os registros.{" "}
-          <button onClick={() => refetch()}>Tentar novamente</button>
-        </div>
-      )}
-      <div className="stat-grid">
-        {stats.map(({ label, value, icon: Icon, note, color }) => (
-          <div className="stat-card" key={label}>
-            <div className="stat-label">
-              {label}
-              <span className={`stat-icon ${color}`}>
-                <Icon size={18} />
-              </span>
-            </div>
-            <strong>{isPending ? "—" : value.toLocaleString("pt-BR")}</strong>
-            <div className="stat-note">{note}</div>
-          </div>
-        ))}
-      </div>
-      <div className="dashboard-middle">
-        <section className="panel map-panel">
-          <div className="section-heading">
-            <div>
-              <h2>Um mapa. Muitas possibilidades.</h2>
-              <p>Veja o que está acontecendo nas ruas.</p>
-            </div>
-            <Link href="/mapa" className="text-link">
-              Explorar mapa <ArrowUpRight size={16} />
-            </Link>
-          </div>
-          <div className="dashboard-map">
-            <Map records={data} />
-            <div className="map-place">
-              <MapPin size={15} /> São Paulo, SP <span>Visão inicial</span>
-            </div>
-          </div>
-          <div className="map-legend">
-            <span>
-              <i className="red" /> Reportado
-            </span>
-            <span>
-              <i className="orange" /> Em análise
-            </span>
-            <span>
-              <i className="green" /> Resolvido
-            </span>
-          </div>
-        </section>
-        <aside className="contribute-card">
-          <span className="contribute-icon">
-            <MapPin size={25} />
-          </span>
-          <div className="eyebrow">SUA CIDADE CONTA COM VOCÊ</div>
-          <h2>
-            Viu um buraco?
-            <br />
-            Mostre o caminho.
-          </h2>
-          <p>
-            Uma foto e alguns segundos podem ajudar a tornar nossas ruas mais
-            seguras.
-          </p>
-          <Link href="/registrar">
-            Registrar uma ocorrência <ArrowRight size={19} />
-          </Link>
-          <div className="road-art">
-            <span />
-            <span />
-            <span />
-          </div>
-          <small>
-            Fotografe com segurança. Nunca use o celular ao dirigir.
-          </small>
-        </aside>
-      </div>
       <section>
-        <div className="section-heading recent-heading">
+        <div className="section-heading">
           <div>
-            <h2>Os últimos olhares pela cidade</h2>
+            <h2>Meus registros</h2>
             <p>
-              Registros recentes da comunidade{demo ? " · dados simulados" : ""}
-              .
+              Indicadores da sua conta, sem os cancelados. Os números da
+              comunidade aparecem separadamente.
             </p>
           </div>
-          <Link href="/mapa" className="text-link">
-            Ver no mapa <ArrowRight size={16} />
+          <Link className="text-link" href="/ocorrencias">
+            Ver meus registros
           </Link>
         </div>
-        {isPending ? (
-          <p aria-live="polite">Carregando ocorrências…</p>
-        ) : data.length ? (
+        {mine.error ? (
+          <div role="alert">
+            Não foi possível carregar seus indicadores.{" "}
+            <button onClick={() => mine.refetch()}>Tentar novamente</button>
+          </div>
+        ) : (
+          <div className="stat-grid">
+            {cards.map(({ label, value, status, icon: Icon }) => (
+              <Link
+                key={label}
+                className="stat-card"
+                href={`/ocorrencias${status ? `?status=${status}` : ""}`}
+              >
+                <div className="stat-label">
+                  {label}
+                  <Icon size={19} />
+                </div>
+                <strong>
+                  {mine.isPending ? "—" : (value || 0).toLocaleString("pt-BR")}
+                </strong>
+                <span>Consultar registros</span>
+              </Link>
+            ))}
+          </div>
+        )}
+        <div className="section-heading recent-heading">
+          <h2>Últimos registros da minha conta</h2>
+        </div>
+        {mine.isPending ? (
+          <p role="status">Carregando seus registros…</p>
+        ) : mine.data?.records.length ? (
           <div className="record-grid">
-            {data.slice(0, 3).map((record) => (
+            {mine.data.records.map((record) => (
               <RecordCard key={record.id} record={record} />
             ))}
           </div>
         ) : (
-          <Empty />
+          !mine.error && (
+            <Empty
+              title="Você ainda não criou registros."
+              description="Use Registrar um problema para enviar sua primeira contribuição."
+            />
+          )
+        )}
+      </section>
+      <section className="panel map-panel community-panel">
+        <div className="section-heading">
+          <div>
+            <h2>Na comunidade</h2>
+            <p>
+              {community.isPending
+                ? "Carregando totais…"
+                : community.error
+                  ? "Totais indisponíveis."
+                  : `${community.data?.summary.total || 0} registros públicos. Estes números incluem outras pessoas.`}
+            </p>
+          </div>
+          <Link className="text-link" href="/mapa">
+            Explorar mapa <ArrowUpRight size={16} />
+          </Link>
+        </div>
+        {community.error ? (
+          <div role="alert">
+            Não foi possível carregar o mapa.{" "}
+            <button onClick={() => community.refetch()}>
+              Tentar novamente
+            </button>
+          </div>
+        ) : (
+          <div className="dashboard-map">
+            <Map
+              records={community.data?.records || []}
+              initialReady={!community.isPending}
+            />
+          </div>
         )}
       </section>
     </Shell>

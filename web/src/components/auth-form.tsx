@@ -208,7 +208,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           <h1>{titles[mode]}</h1>
           <p>
             {mode === "login"
-              ? "Entre para registrar e acompanhar suas contribuições."
+              ? "Entre para registrar e acompanhar seus registros."
               : mode === "signup"
                 ? "Crie sua conta e ajude a cuidar dos nossos caminhos."
                 : "Informe seus dados para continuar com segurança."}

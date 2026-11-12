@@ -1,4 +1,12 @@
-export type Status = "pendente" | "em_analise" | "resolvido";
+export type Status =
+  | "pendente"
+  | "em_analise"
+  | "programado"
+  | "em_execucao"
+  | "resolvido"
+  | "rejeitado"
+  | "duplicado"
+  | "encaminhado";
 export type Detection = {
   class_id: number;
   class_name: string;
@@ -18,6 +26,7 @@ export type Occurrence = {
   image_path: string;
   image_url?: string;
   status: Status;
+  workflow_version?: number;
   detection_count: number;
   max_confidence: number;
   description: string;
@@ -27,6 +36,15 @@ export type Occurrence = {
   image_width?: number;
   image_height?: number;
   simulated?: boolean;
+  problem_type?: import("@/lib/registration").ProblemType;
+  immediate_danger?: boolean;
+  analysis_state?: "completed" | "failed" | "not_requested" | "legacy";
+  ai_feedback?: "confirmed" | "corrected" | "not_verified";
+  human_has_pothole?: boolean | null;
+  support_count?: number;
+  owner_id?: string;
+  cancelled_at?: string | null;
+  hidden_at?: string | null;
 };
 export type Bounds = {
   south: number;
@@ -37,5 +55,10 @@ export type Bounds = {
 export const statusLabels: Record<Status, string> = {
   pendente: "Reportado",
   em_analise: "Em análise",
+  programado: "Intervenção programada",
+  em_execucao: "Em execução",
   resolvido: "Resolvido",
+  rejeitado: "Não aprovado",
+  duplicado: "Duplicado",
+  encaminhado: "Encaminhado a outro órgão",
 };
