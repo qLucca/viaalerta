@@ -1,6 +1,6 @@
 import { Tabs, Redirect } from "expo-router";
 import { View } from "react-native";
-import { Home, Map, Plus, ClipboardList, UserRound } from "lucide-react-native";
+import { Home, Map, Plus, ClipboardList, UserRound, Bell } from "lucide-react-native";
 import { useAuth } from "../../src/providers";
 import { useTheme } from "../../src/theme";
 import { Loading } from "../../src/components/ui";
@@ -68,6 +68,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <ClipboardList size={21} color={color} />,
         }}
       />
+      <Tabs.Screen name="notificacoes" options={{ title: "Avisos", tabBarIcon: ({ color }) => <Bell size={21} color={color} /> }} />
       <Tabs.Screen
         name="perfil"
         options={{

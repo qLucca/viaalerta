@@ -15,6 +15,7 @@ import {
 import { DetectionImage } from "../../src/components/DetectionImage";
 import { listOccurrences } from "../../src/lib/occurrences";
 import Map from "../../src/map/Map";
+import { ProcessPanel } from "../../src/components/ProcessPanel";
 export default function Detail() {
   const params = useLocalSearchParams<{ id: string; local?: string }>();
   const { user, demo, loading } = useAuth();
@@ -100,6 +101,7 @@ export default function Detail() {
               {r.description || "Nenhuma observação adicional."}
             </Txt>
           </Card>
+          <ProcessPanel id={r.id} status={r.status} />
           <Section title="Local da ocorrência" />
           <Txt muted style={{ fontSize: 11, marginBottom: 13 }}>
             {r.latitude.toFixed(5)}, {r.longitude.toFixed(5)}

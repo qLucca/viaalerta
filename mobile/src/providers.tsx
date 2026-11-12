@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Linking from "expo-linking";
@@ -34,6 +34,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         defaultOptions: { queries: { staleTime: 20000, retry: 1 } },
       }),
   );
+  const previousIdentity = useRef<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [demo, setDemo] = useState(false);
   const [demoName, setDemoName] = useState("Visitante");
@@ -62,6 +63,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         }
       });
     const subscription = supabase?.auth.onAuthStateChange((event, current) => {
+      const identity = current?.user.id || null;
+      if (previousIdentity.current !== identity) client.clear();
+      previousIdentity.current = identity;
       setSession(current);
       if (event === "PASSWORD_RECOVERY") router.replace("/redefinir-senha");
     }).data.subscription;
@@ -121,7 +125,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       linkSubscription.remove();
       supabase?.auth.stopAutoRefresh();
     };
-  }, []);
+  }, [client]);
   async function enterDemo() {
     await AsyncStorage.setItem("viaalerta-demo-session", "true");
     setDemo(true);

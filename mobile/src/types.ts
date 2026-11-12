@@ -1,4 +1,12 @@
-export type Status = "pendente" | "em_analise" | "resolvido";
+export type Status =
+  | "pendente"
+  | "em_analise"
+  | "programado"
+  | "em_execucao"
+  | "resolvido"
+  | "rejeitado"
+  | "duplicado"
+  | "encaminhado";
 export type Detection = {
   class_id: number;
   class_name: string;
@@ -26,6 +34,7 @@ export type Occurrence = {
   image_path: string;
   image_url?: string;
   status: Status;
+  workflow_version?: number;
   detection_count: number;
   max_confidence: number;
   description: string;
@@ -45,5 +54,10 @@ export type Point = [number, number];
 export const statusLabels: Record<Status, string> = {
   pendente: "Reportado",
   em_analise: "Em análise",
+  programado: "Intervenção programada",
+  em_execucao: "Em execução",
   resolvido: "Resolvido",
+  rejeitado: "Não aprovado",
+  duplicado: "Duplicado",
+  encaminhado: "Encaminhado a outro órgão",
 };

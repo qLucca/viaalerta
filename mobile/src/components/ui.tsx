@@ -313,9 +313,9 @@ export function Field({
 export function Badge({ status }: { status: Status }) {
   const { colors } = useTheme();
   const color =
-    status === "pendente"
+    status === "pendente" || status === "rejeitado"
       ? colors.red
-      : status === "em_analise"
+      : status !== "resolvido"
         ? colors.orange
         : colors.green;
   return (

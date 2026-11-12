@@ -3,14 +3,17 @@
     "name": "ViaAlerta",
     "slug": "viaalerta-android",
     "scheme": "viaalerta",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
-    "platforms": ["android", "web"],
+    "platforms": [
+      "android",
+      "web"
+    ],
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "android": {
       "package": "com.viaalerta.app",
-      "versionCode": 1,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#247D61"

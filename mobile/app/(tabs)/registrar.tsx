@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Pressable, Switch } from "react-native";
 import { router } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,7 +22,7 @@ import {
 import { DetectionImage } from "../../src/components/DetectionImage";
 import { useAuth } from "../../src/providers";
 import { useTheme } from "../../src/theme";
-import { pickPhoto, examplePhoto } from "../../src/lib/photos";
+import { pickPhoto, examplePhoto, recoverPhoto } from "../../src/lib/photos";
 import { analyzePhoto, mockDetection } from "../../src/lib/detection";
 import { currentPoint } from "../../src/lib/location";
 import { saveOccurrence } from "../../src/lib/occurrences";
@@ -46,6 +46,13 @@ export default function Register() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const simulated = demo || mockDetection;
+  useEffect(() => {
+    let active = true;
+    recoverPhoto().then(selected => {
+      if (active && selected) { setPhoto(selected); setAnalysis(undefined); setStep(1); setConfirmed(false); setConsent(false); setChosen(false); }
+    }).catch(e => { if (active) setError((e as Error).message); });
+    return () => { active = false; };
+  }, []);
   async function choose(source: "camera" | "gallery" | "example") {
     setBusy(true);
     setError("");

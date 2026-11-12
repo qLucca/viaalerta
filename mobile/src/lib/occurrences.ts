@@ -18,6 +18,7 @@ export async function listOccurrences(
   demo: boolean,
   options: {
     mine?: boolean;
+    staff?: boolean;
     bounds?: Bounds;
     status?: Status;
     id?: string;
@@ -49,7 +50,7 @@ export async function listOccurrences(
       .slice(offset, offset + limit);
   if (!supabase) throw new Error("Supabase não configurado.");
   let query = supabase
-    .from(options.mine ? table : view)
+    .from(options.mine || options.staff ? table : view)
     .select(
       "id,latitude,longitude,image_path,status,detection_count,max_confidence,description,created_at,image_width,image_height,detections",
     )
@@ -145,7 +146,7 @@ export async function saveOccurrence(
 
 export async function countOccurrences(
   demo: boolean,
-  options: { mine?: boolean; status?: Status } = {},
+  options: { mine?: boolean; staff?: boolean; status?: Status } = {},
 ) {
   if (demo)
     return (await readDemo()).filter(
@@ -153,7 +154,7 @@ export async function countOccurrences(
     ).length;
   if (!supabase) throw new Error("Supabase não configurado.");
   let query = supabase
-    .from(options.mine ? table : view)
+    .from(options.mine || options.staff ? table : view)
     .select("id", { count: "exact", head: true });
   if (options.mine) {
     const {

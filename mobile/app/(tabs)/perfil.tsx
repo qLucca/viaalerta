@@ -15,8 +15,10 @@ import {
 import { useAuth } from "../../src/providers";
 import { useTheme } from "../../src/theme";
 import { countOccurrences } from "../../src/lib/occurrences";
+import { useRole } from "../../src/lib/use-role";
 export default function Profile() {
   const { user, demo, rename, logout } = useAuth();
+  const { role, staff, needsMfa } = useRole();
   const { colors, preference, setPreference } = useTheme();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -58,6 +60,34 @@ export default function Profile() {
   }
   return (
     <Screen title="Meu perfil" subtitle="Seu espaço. Suas contribuições.">
+      {!demo && (
+        <Card>
+          <Button
+            title="Segurança e autenticador"
+            onPress={() => router.push("/seguranca")}
+            outline
+          />
+          <Button
+            title="Notificações"
+            onPress={() => router.push("/notificacoes")}
+            outline
+          />
+          {(staff || needsMfa) && (
+            <Button
+              title="Gestão da prefeitura"
+              onPress={() => router.push("/gestao")}
+              outline
+            />
+          )}
+          {role === "admin" && (
+            <Button
+              title="Administração de acessos"
+              onPress={() => router.push("/administracao")}
+              outline
+            />
+          )}
+        </Card>
+      )}
       <Card>
         <View
           style={{

@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+import { fetch as expoFetch } from "expo/fetch";
 import { supabase } from "./supabase";
 import type { Analysis, Photo } from "../types";
 import {
@@ -28,7 +30,7 @@ export async function analyzePhoto(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await fetch(endpoint, {
+    const response = await (Platform.OS === "web" ? fetch : expoFetch)(endpoint, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: await multipartPhoto(photo),

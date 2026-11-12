@@ -86,7 +86,7 @@ html,body,#map{height:100%;width:100%;margin:0;background:#eaf0e9;font-family:Ar
       var color =
         r.status === 'resolvido'
           ? '#278365'
-          : r.status === 'em_analise'
+          : ['em_analise','programado','em_execucao'].includes(r.status)
             ? '#dea04b'
             : '#dd6b5e';
       var marker = L.marker([r.latitude, r.longitude], {
