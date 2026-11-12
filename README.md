@@ -246,9 +246,12 @@ publicadas. A remoção desses arquivos deve ser tratada pelo administrador.
 
 O painel separa totais pessoais e públicos. O mapa tem filtros por situação,
 tipo, período e autoria, com lista navegável por teclado. Gestores e
-administradores com MFA podem exportar a fila autorizada em CSV. Esta etapa
-prioriza a web; a versão Android precisa ser atualizada e validada antes de
-usar os novos perfis institucionais.
+administradores com MFA podem exportar a fila autorizada em CSV. O Android 1.0.2 reconhece os perfis institucionais, verifica MFA, mostra o
+histórico e publica andamentos com motivo ou foto de conclusão quando exigidos.
+A administração completa de acessos abre o portal seguro no navegador. O primeiro
+autenticador é configurado no portal; depois, o código verifica a sessão no app.
+A seleção de fotos usa alternativa compatível no Android após falha e converte a
+imagem para JPEG. A validação em aparelho físico continua necessária.
 
 O modo demonstração guarda fotos e registros apenas no navegador. Ele não
 notifica a prefeitura. A tela de sucesso não promete atendimento ou envio de
