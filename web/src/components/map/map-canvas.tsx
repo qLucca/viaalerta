@@ -6,6 +6,7 @@ import {
   useMap,
   useMapEvents,
   Marker,
+  Circle,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -205,30 +206,45 @@ function MapEvents({
 function LocationPoint({
   point,
   onPoint,
+  accuracy,
 }: {
   point: [number, number];
   onPoint?: (point: [number, number]) => void;
+  accuracy?: number;
 }) {
   const map = useMap();
   const ref = useRef<L.Marker>(null);
   useEffect(() => {
-    map.panTo(point);
-  }, [point, map]);
+    if (accuracy !== undefined) map.setView(point, Math.max(map.getZoom(), 18));
+    else map.panTo(point);
+  }, [point, map, accuracy]);
   return (
-    <Marker
-      ref={ref}
-      position={point}
-      icon={pin("#25836b")}
-      title="Local selecionado"
-      alt="Marcador do local selecionado"
-      draggable={!!onPoint}
-      eventHandlers={{
-        dragend() {
-          const p = ref.current?.getLatLng();
-          if (p) onPoint?.([p.lat, p.lng]);
-        },
-      }}
-    />
+    <>
+      {accuracy !== undefined &&
+        Number.isFinite(accuracy) &&
+        accuracy >= 0 &&
+        accuracy <= 10000 && (
+          <Circle
+            center={point}
+            radius={accuracy}
+            pathOptions={{ color: "#25836b", fillOpacity: 0.1, weight: 1 }}
+          />
+        )}
+      <Marker
+        ref={ref}
+        position={point}
+        icon={pin("#25836b")}
+        title="Local selecionado"
+        alt="Marcador do local selecionado"
+        draggable={!!onPoint}
+        eventHandlers={{
+          dragend() {
+            const p = ref.current?.getLatLng();
+            if (p) onPoint?.([p.lat, p.lng]);
+          },
+        }}
+      />
+    </>
   );
 }
 export default function MapCanvas({
@@ -238,6 +254,7 @@ export default function MapCanvas({
   initialRecords,
   initialReady = true,
   point,
+  accuracy,
   onPoint,
   onBounds,
   center = DEFAULT_CITY.center,
@@ -248,6 +265,7 @@ export default function MapCanvas({
   initialRecords?: Occurrence[];
   initialReady?: boolean;
   point?: [number, number];
+  accuracy?: number;
   onPoint?: (point: [number, number]) => void;
   onBounds?: (bounds: Bounds) => void;
   center?: [number, number];
@@ -262,15 +280,21 @@ export default function MapCanvas({
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <InitialViewport
         records={initialRecords ?? records}
         ready={initialReady}
         point={point}
       />
-      <MapEvents onBounds={onBounds} onPoint={onPoint} viewportReady={initialReady} />
-      {point && <LocationPoint point={point} onPoint={onPoint} />}
+      <MapEvents
+        onBounds={onBounds}
+        onPoint={onPoint}
+        viewportReady={initialReady}
+      />
+      {point && (
+        <LocationPoint point={point} onPoint={onPoint} accuracy={accuracy} />
+      )}
       <SelectedRecord record={records.find((r) => r.id === selectedId)} />
       <Points records={records} onSelect={onSelect} />
     </MapContainer>

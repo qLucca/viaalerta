@@ -7,10 +7,12 @@ html,body,#map{height:100%;width:100%;margin:0;background:#eaf0e9;font-family:Ar
       zoomControl: true,
       maxZoom: 19,
       minZoom: 3,
-    }).setView([-23.552, -46.65], 14),
+    }).setView([-18.9186, -48.2772], 14),
     selected = null,
     oldPoint = null,
-    focusKey = null;
+    focusKey = null,
+    precisionCircle = null,
+    focusMarker = null;
   var cluster = L.markerClusterGroup({
     showCoverageOnHover: false,
     maxClusterRadius: 45,
@@ -24,7 +26,7 @@ html,body,#map{height:100%;width:100%;margin:0;background:#eaf0e9;font-family:Ar
   });
   map.addLayer(cluster);
   var tiles = L.tileLayer(
-    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     {
       attribution:
         '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -81,6 +83,12 @@ html,body,#map{height:100%;width:100%;margin:0;background:#eaf0e9;font-family:Ar
   window.setViaData = function (data) {
     document.body.classList.toggle('dark', !!data.dark);
     picking = !!data.picking;
+    if (precisionCircle) { map.removeLayer(precisionCircle); precisionCircle = null; }
+    var accuracyPoint = data.point || data.focus;
+    if (focusMarker) {map.removeLayer(focusMarker);focusMarker=null;}
+    if (data.focus && !data.point) focusMarker=L.marker(data.focus,{icon:icon('#277e5f'),title:'Sua posição',alt:'Sua posição atual'}).addTo(map);
+    if (accuracyPoint && typeof data.accuracy === 'number' && data.accuracy >= 0 && data.accuracy <= 10000)
+      precisionCircle = L.circle(accuracyPoint, {radius:data.accuracy,color:'#277e5f',fillOpacity:0.12,interactive:false}).addTo(map);
     cluster.clearLayers();
     (data.records || []).forEach(function (r) {
       var color =
@@ -119,7 +127,7 @@ html,body,#map{height:100%;width:100%;margin:0;background:#eaf0e9;font-family:Ar
         Math.abs(oldPoint[1] - data.point[1]) > 0.000001
       ) {
         selected.setLatLng(data.point);
-        map.panTo(data.point);
+        map.setView(data.point, Math.max(map.getZoom(), 18));
         oldPoint = data.point;
       }
     } else if (selected) {
@@ -129,7 +137,7 @@ html,body,#map{height:100%;width:100%;margin:0;background:#eaf0e9;font-family:Ar
     }
     if (data.focus && JSON.stringify(data.focus) !== focusKey) {
       focusKey = JSON.stringify(data.focus);
-      map.setView(data.focus, 15);
+      map.setView(data.focus, 18);
     }
     setTimeout(function () {
       map.invalidateSize();

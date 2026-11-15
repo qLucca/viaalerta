@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as Crypto from "expo-crypto";
-import { View, Pressable, Switch } from "react-native";
+import { View, Pressable, Switch, Platform } from "react-native";
 import { router } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -25,12 +25,13 @@ import { useAuth } from "../../src/providers";
 import { useTheme } from "../../src/theme";
 import { pickPhoto, examplePhoto, recoverPhoto } from "../../src/lib/photos";
 import { analyzePhoto, mockDetection } from "../../src/lib/detection";
-import { currentPoint } from "../../src/lib/location";
+import { currentFix } from "../../src/lib/location";
+import { offlineDrafts } from "../../src/lib/offline";
 import { saveOccurrence } from "../../src/lib/occurrences";
 import Map from "../../src/map/Map";
 import type { Analysis, Photo, Point } from "../../src/types";
 export default function Register() {
-  const { demo } = useAuth();
+  const { demo, user } = useAuth();
   const { colors } = useTheme();
   const cache = useQueryClient();
   const [step, setStep] = useState(0);
@@ -40,6 +41,7 @@ export default function Register() {
   const [latitude, setLatitude] = useState("-18.9186");
   const [longitude, setLongitude] = useState("-48.2772");
   const [chosen, setChosen] = useState(false);
+  const [accuracy, setAccuracy] = useState<number>();
   const [confirmed, setConfirmed] = useState(false);
   const [empty, setEmpty] = useState(false);
   const [notes, setNotes] = useState("");
@@ -47,6 +49,7 @@ export default function Register() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const simulated = demo || mockDetection;
+  const locationGeneration = useRef(0);
   const submission = useRef<{
     id: string;
     photo: Photo;
@@ -73,6 +76,7 @@ export default function Register() {
       });
     return () => {
       active = false;
+      locationGeneration.current++;
     };
   }, []);
   async function choose(source: "camera" | "gallery" | "example") {
@@ -111,6 +115,9 @@ export default function Register() {
     }
   }
   function changePoint(next: Point) {
+    locationGeneration.current++;
+    setConsent(false);
+    setAccuracy(undefined);
     setPoint(next);
     setLatitude(String(next[0]));
     setLongitude(String(next[1]));
@@ -118,10 +125,14 @@ export default function Register() {
     setConfirmed(false);
   }
   async function locate() {
+    const ticket = ++locationGeneration.current;
     setBusy(true);
     setError("");
     try {
-      changePoint(await currentPoint());
+      const fix = await currentFix();
+      if (ticket !== locationGeneration.current) return;
+      changePoint(fix.point);
+      setAccuracy(fix.accuracy ?? undefined);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -144,6 +155,43 @@ export default function Register() {
     }
     setError("");
     changePoint([lat, lon]);
+  }
+  async function saveLocal() {
+    if (!user || demo || !photo || !chosen || !confirmed) return;
+    setBusy(true);
+    setError("");
+    try {
+      const pending = submission.current;
+      if (
+        pending?.demo ||
+        pending?.analysis.simulated ||
+        (!pending && analysis?.simulated)
+      )
+        throw new Error(
+          "Use uma fotografia real, sem análise simulada, para guardar um rascunho de publicação.",
+        );
+      await offlineDrafts.add(
+        user.id,
+        pending?.id ?? Crypto.randomUUID(),
+        pending?.photo ?? photo,
+        pending?.point ?? point,
+        pending?.notes ?? notes.trim(),
+      );
+      submission.current = null;
+      setStep(0);
+      setPhoto(undefined);
+      setAnalysis(undefined);
+      setConfirmed(false);
+      setChosen(false);
+      setConsent(false);
+      setNotes("");
+      await cache.invalidateQueries({ queryKey: ["offline-drafts", user.id] });
+      router.push("/rascunhos");
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
   async function save() {
     if (!photo || !analysis || !chosen || !confirmed || !consent) return;
@@ -191,6 +239,15 @@ export default function Register() {
       title="Registrar buraco"
       subtitle="Uma foto pode ser o começo de um caminho melhor."
     >
+      {Platform.OS !== "web" && !demo && (
+        <Button
+          title="Ver rascunhos neste aparelho"
+          outline
+          disabled={busy}
+          onPress={() => router.push("/rascunhos")}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <View style={{ flexDirection: "row", gap: 4, marginBottom: 25 }}>
         {["Foto", "Análise", "Local", "Revisão"].map((label, i) => (
           <View key={label} style={{ flex: 1, alignItems: "center", gap: 7 }}>
@@ -425,8 +482,25 @@ export default function Register() {
             icon={<LocateFixed size={17} color={colors.green} />}
           />
           <View style={{ height: 310, marginTop: 18, marginBottom: 14 }}>
-            <Map point={point} picking onPoint={changePoint} />
+            <Map
+              point={point}
+              accuracy={accuracy}
+              picking
+              onPoint={changePoint}
+            />
           </View>
+          {accuracy !== undefined && (
+            <Notice
+              text={`Precisão estimada do GPS: ${Math.ceil(accuracy)} m. Confira o local da foto e ajuste o marcador se necessário.`}
+            />
+          )}
+          <Txt>
+            {point[0].toFixed(6)}, {point[1].toFixed(6)}
+          </Txt>
+          <Txt muted>
+            Sem conexão, as ruas podem não carregar. GPS e coordenadas manuais
+            continuam disponíveis se o aparelho conseguir obter o sinal.
+          </Txt>
           <Txt muted style={{ fontSize: 10, lineHeight: 18, marginBottom: 18 }}>
             Toque no local ou arraste o marcador. Você também pode informar as
             coordenadas abaixo.
@@ -515,7 +589,7 @@ export default function Register() {
                 LOCAL CONFIRMADO
               </Txt>
               <Txt style={{ fontSize: 13, fontWeight: "600", marginTop: 4 }}>
-                {point[0].toFixed(5)}, {point[1].toFixed(5)}
+                {point[0].toFixed(6)}, {point[1].toFixed(6)}
               </Txt>
             </View>
             <Txt muted style={{ fontSize: 10 }}>
@@ -592,6 +666,21 @@ export default function Register() {
             onPress={() => setStep(2)}
             style={{ marginTop: 11 }}
           />
+          {Platform.OS !== "web" && !demo && !analysis.simulated && (
+            <>
+              <Button
+                title="Guardar no aparelho e enviar depois"
+                outline
+                disabled={busy || !confirmed}
+                onPress={saveLocal}
+                style={{ marginTop: 11 }}
+              />
+              <Txt muted>
+                Guarda uma cópia local da foto e do ponto, sem publicar. Você
+                autorizará o envio em Rascunhos quando tiver internet.
+              </Txt>
+            </>
+          )}
         </>
       )}
     </Screen>

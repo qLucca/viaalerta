@@ -1,5 +1,9 @@
 # ViaAlerta
 
+O mapa permite conferir as coordenadas e a margem de precisão do GPS. O Android
+também guarda fotos e coordenadas para envio posterior. Veja o [guia de mapa e
+rascunhos offline](docs/MAPA_E_OFFLINE.md) para uso e limites.
+
 O ViaAlerta é um sistema para registrar buracos em vias públicas por fotografia e
 localização. Ele reúne uma aplicação web, um aplicativo Android e uma API de
 visão computacional. O objetivo é facilitar o registro e a consulta de ocorrências

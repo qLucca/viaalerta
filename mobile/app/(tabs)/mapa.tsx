@@ -13,7 +13,7 @@ import {
   type Status,
 } from "../../src/types";
 import { listOccurrences } from "../../src/lib/occurrences";
-import { currentPoint } from "../../src/lib/location";
+import { currentFix } from "../../src/lib/location";
 import Map from "../../src/map/Map";
 export default function MapPage() {
   const { demo, user } = useAuth();
@@ -21,6 +21,7 @@ export default function MapPage() {
   const [bounds, setBounds] = useState<Bounds>();
   const [status, setStatus] = useState<Status | "">("");
   const [focus, setFocus] = useState<Point>();
+  const [accuracy, setAccuracy] = useState<number>();
   const [locating, setLocating] = useState(false);
   const [message, setMessage] = useState("");
   const {
@@ -38,7 +39,9 @@ export default function MapPage() {
     setLocating(true);
     setMessage("");
     try {
-      setFocus(await currentPoint());
+      const fix = await currentFix();
+      setFocus(fix.point);
+      setAccuracy(fix.accuracy ?? undefined);
     } catch (e) {
       setMessage((e as Error).message);
     } finally {
@@ -88,6 +91,14 @@ export default function MapPage() {
         )}
       </ScrollView>
       {!!message && <Notice text={message} error />}
+      {focus && (
+        <Txt>
+          {focus[0].toFixed(6)}, {focus[1].toFixed(6)}
+          {accuracy !== undefined
+            ? ` · precisão estimada: ${Math.ceil(accuracy)} m`
+            : ""}
+        </Txt>
+      )}
       {data.length === 500 && (
         <Notice text="Exibindo os 500 registros mais recentes desta área. Aproxime o mapa ou filtre por status para consultar outros pontos." />
       )}
@@ -101,6 +112,7 @@ export default function MapPage() {
         <Map
           records={data}
           focus={focus}
+          accuracy={accuracy}
           onBounds={setBounds}
           onSelect={(id) =>
             router.push({ pathname: "/ocorrencia/[id]", params: { id } })

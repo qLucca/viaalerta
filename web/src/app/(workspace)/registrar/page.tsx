@@ -1,4 +1,5 @@
 "use client";
+import { currentLocation } from "@/lib/location";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -93,6 +94,7 @@ function RegistrationForm() {
     id: string;
     simulated: boolean;
   } | null>(null);
+  const [accuracy, setAccuracy] = useState<number>();
   const [coordinates, setCoordinates] = useState({
     latitude: "",
     longitude: "",
@@ -225,6 +227,7 @@ function RegistrationForm() {
     }
   }
   function changePoint(point: [number, number]) {
+    setAccuracy(undefined);
     locationGeneration.current++;
     setLocating(false);
     patch({
@@ -235,28 +238,20 @@ function RegistrationForm() {
     });
     setCoordinates({ latitude: String(point[0]), longitude: String(point[1]) });
   }
-  function locate() {
-    if (!navigator.geolocation) {
-      toast.error("Seu navegador não oferece localização. Clique no mapa.");
-      return;
-    }
+  async function locate() {
     const ticket = ++locationGeneration.current;
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        if (ticket !== locationGeneration.current) return;
-        changePoint([p.coords.latitude, p.coords.longitude]);
-        setLocating(false);
-      },
-      () => {
-        if (ticket !== locationGeneration.current) return;
-        setLocating(false);
-        toast.error(
-          "Não foi possível acessar sua localização. Clique no mapa para escolher o local.",
-        );
-      },
-      { timeout: 12000, enableHighAccuracy: true },
-    );
+    try {
+      const fix = await currentLocation();
+      if (ticket !== locationGeneration.current) return;
+      changePoint(fix.point);
+      setAccuracy(fix.accuracy);
+    } catch (error) {
+      if (ticket === locationGeneration.current)
+        toast.error((error as Error).message);
+    } finally {
+      if (ticket === locationGeneration.current) setLocating(false);
+    }
   }
   function useCoordinates() {
     const lat = Number(coordinates.latitude),
@@ -711,16 +706,28 @@ function RegistrationForm() {
                 initialRecords={initial.data}
                 initialReady={!initial.isPending}
                 point={f.point}
+                accuracy={accuracy}
                 onPoint={saving ? undefined : changePoint}
               />
             </div>
             <p role="status">
               {f.point
                 ? f.confirmed
-                  ? "Local aproximado · confirmado"
-                  : "Local aproximado · confira e confirme"
+                  ? "Ponto confirmado"
+                  : "Confira o ponto e confirme"
                 : "Nenhum local selecionado"}
             </p>
+            {f.point && (
+              <p>
+                {f.point[0].toFixed(6)}, {f.point[1].toFixed(6)}
+              </p>
+            )}
+            {accuracy !== undefined && (
+              <p role="status">
+                Precisão estimada do GPS: {Math.ceil(accuracy)} m. Confira o
+                local da foto e ajuste o marcador se necessário.
+              </p>
+            )}
             <details className="technical-details">
               <summary>Detalhes técnicos da localização</summary>
               <p>

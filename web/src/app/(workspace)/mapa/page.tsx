@@ -1,4 +1,5 @@
 "use client";
+import { currentLocation } from "@/lib/location";
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
@@ -26,6 +27,7 @@ export default function MapPage() {
     [point, setPoint] = useState<[number, number]>(),
     [locating, setLocating] = useState(false),
     [supporting, setSupporting] = useState(false);
+  const [accuracy, setAccuracy] = useState<number>();
   const source = demo || !supabase;
   const initial = useQuery({
     queryKey: ["map-initial", source],
@@ -51,25 +53,17 @@ export default function MapPage() {
   });
   const records = query.data || [],
     record = records.find((r) => r.id === selected);
-  function locate() {
-    if (!navigator.geolocation) {
-      toast.error("Localização não disponível.");
-      return;
-    }
+  async function locate() {
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (p) => {
-        setPoint([p.coords.latitude, p.coords.longitude]);
-        setLocating(false);
-      },
-      () => {
-        setLocating(false);
-        toast.error(
-          "Não foi possível obter sua localização. Você pode navegar pelo mapa.",
-        );
-      },
-      { timeout: 12000 },
-    );
+    try {
+      const fix = await currentLocation();
+      setPoint(fix.point);
+      setAccuracy(fix.accuracy);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setLocating(false);
+    }
   }
   return (
     <Shell
@@ -135,6 +129,14 @@ export default function MapPage() {
             {locating ? "Localizando…" : "Minha localização"}
           </Button>
         </div>
+        {point && (
+          <p role="status">
+            Sua posição: {point[0].toFixed(6)}, {point[1].toFixed(6)}
+            {accuracy !== undefined
+              ? ` · precisão estimada: ${Math.ceil(accuracy)} m`
+              : ""}
+          </p>
+        )}
         {!user && (
           <p>
             Entre na sua conta para consultar apenas seus registros ou apoiar um
@@ -180,6 +182,7 @@ export default function MapPage() {
               initialRecords={initial.data}
               initialReady={!initial.isPending}
               point={point}
+              accuracy={accuracy}
               onBounds={setBounds}
               selectedId={selected}
               onSelect={setSelected}

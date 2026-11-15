@@ -3,6 +3,7 @@ export type MapProps = {
   records?: Occurrence[];
   point?: Point;
   focus?: Point;
+  accuracy?: number;
   picking?: boolean;
   onPoint?: (point: Point) => void;
   onBounds?: (bounds: Bounds) => void;
@@ -35,8 +36,7 @@ export function handleMapMessage(raw: unknown, props: MapProps) {
       )
         props.onBounds?.(b);
     }
-  } catch {
-  }
+  } catch {}
 }
 export function mapPayload(props: MapProps, dark: boolean) {
   return {
@@ -44,6 +44,13 @@ export function mapPayload(props: MapProps, dark: boolean) {
     picking: !!props.picking,
     point: props.point,
     focus: props.focus,
+    accuracy:
+      typeof props.accuracy === "number" &&
+      Number.isFinite(props.accuracy) &&
+      props.accuracy >= 0 &&
+      props.accuracy <= 10000
+        ? props.accuracy
+        : undefined,
     records: (props.records || []).map((r) => ({
       id: r.id,
       latitude: r.latitude,

@@ -6,8 +6,10 @@ import {
   Linking,
   Modal,
   View,
+  Platform,
 } from "react-native";
 import { useState } from "react";
+import { router, usePathname } from "expo-router";
 import { supabase } from "../lib/supabase";
 type Status = {
   state: "active" | "suspended" | "banned";
@@ -26,6 +28,8 @@ export function AccountAccess({
   children: React.ReactNode;
 }) {
   const [actionError, setActionError] = useState("");
+  const [localMode, setLocalMode] = useState(false);
+  const pathname = usePathname();
   const query = useQuery({
     queryKey: ["account-access", userId],
     enabled: !!userId && !demo && !!supabase,
@@ -45,13 +49,28 @@ export function AccountAccess({
       return result.data as Status;
     },
   });
+  const localAccess =
+    Platform.OS !== "web" &&
+    localMode &&
+    query.isError &&
+    !["banned", "suspended"].includes(query.data?.state || "") &&
+    ["/rascunhos", "/registrar", "/mapa"].includes(pathname);
   const allowed =
+    localAccess ||
     !userId ||
     demo ||
     !supabase ||
     (!query.isError && query.data?.state === "active");
   return (
     <View style={{ flex: 1 }}>
+      {localAccess && (
+        <Text
+          style={{ padding: 10, backgroundColor: "#dceee5", color: "#15382c" }}
+        >
+          Modo local: guarde rascunhos. Envio, IA e consultas precisam de
+          conexão.
+        </Text>
+      )}
       <View
         style={{ flex: 1 }}
         pointerEvents={allowed ? "auto" : "none"}
@@ -105,6 +124,22 @@ export function AccountAccess({
           )}
           {!query.isPending && (
             <>
+              {Platform.OS !== "web" &&
+                query.isError &&
+                !["banned", "suspended"].includes(query.data?.state || "") && (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setLocalMode(true);
+                      router.replace("/rascunhos");
+                    }}
+                    style={{ padding: 16, backgroundColor: "#dceee5" }}
+                  >
+                    <Text style={{ color: "#15382c" }}>
+                      Continuar com rascunhos no aparelho
+                    </Text>
+                  </Pressable>
+                )}
               <Pressable
                 accessibilityRole="button"
                 onPress={() => void query.refetch()}

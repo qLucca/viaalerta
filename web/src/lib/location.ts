@@ -1,5 +1,43 @@
 export type MapPoint = [number, number];
 
+export async function currentLocation(
+  geo: Geolocation | undefined = navigator.geolocation,
+): Promise<{ point: MapPoint; accuracy?: number }> {
+  if (!geo)
+    throw new Error("Localização indisponível. Escolha o ponto no mapa.");
+  return new Promise((resolve, reject) =>
+    geo.getCurrentPosition(
+      ({ coords }) => {
+        const point: MapPoint = [coords.latitude, coords.longitude];
+        if (
+          !validMapPoints([{ latitude: point[0], longitude: point[1] }]).length
+        ) {
+          reject(
+            new Error(
+              "O navegador retornou uma posição inválida. Escolha o ponto no mapa.",
+            ),
+          );
+          return;
+        }
+        resolve({
+          point,
+          accuracy:
+            Number.isFinite(coords.accuracy) && coords.accuracy >= 0
+              ? coords.accuracy
+              : undefined,
+        });
+      },
+      () =>
+        reject(
+          new Error(
+            "Não foi possível acessar sua localização. Escolha o ponto no mapa ou informe as coordenadas.",
+          ),
+        ),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
+    ),
+  );
+}
+
 function coordinate(
   value: string | undefined,
   fallback: number,

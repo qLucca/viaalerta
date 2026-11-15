@@ -92,6 +92,7 @@ export async function saveOccurrence(
   description: string,
   demo: boolean,
   id = Crypto.randomUUID(),
+  expectedOwner?: string,
 ) {
   const common = {
     id,
@@ -135,6 +136,8 @@ export async function saveOccurrence(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Sua sessão expirou. Entre novamente.");
+  if (expectedOwner && user.id !== expectedOwner)
+    throw new Error("Entre na conta que criou este rascunho para enviá-lo.");
   const image_path = `${user.id}/${id}.jpg`;
   await persistOnce({
     exists: async () => {
