@@ -35,8 +35,21 @@ export function AccountAccess({
     enabled: !!userId && !demo && !!supabase,
     refetchInterval: 30000,
     retry: false,
-    queryFn: async () => {
-      const result = await supabase!.rpc("viaalerta_my_account_status");
+    queryFn: async ({ signal }) => {
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      signal.addEventListener("abort", abort, { once: true });
+      if (signal.aborted) abort();
+      const timeout = setTimeout(abort, 10000);
+      let result;
+      try {
+        result = await supabase!
+          .rpc("viaalerta_my_account_status")
+          .abortSignal(controller.signal);
+      } finally {
+        clearTimeout(timeout);
+        signal.removeEventListener("abort", abort);
+      }
       if (result.error?.code === "PGRST202")
         return { state: "active", until: null, reason: null } as Status;
       if (
