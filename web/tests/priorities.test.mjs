@@ -219,7 +219,13 @@ test("foto posterior exige sessão e permissão de atuação antes de subir o ar
     auth: {
       getUser: async () => ({ data: { user: { id: "user" } }, error: null }),
     },
-    rpc: async () => ({ data: { can_manage: false }, error: null }),
+    rpc: async (name) => ({
+      data:
+        name === "viaalerta_my_account_status"
+          ? { state: "active", until: null, reason: null }
+          : { can_manage: false },
+      error: null,
+    }),
     storage: {
       from: () => ({
         upload: async () => {
@@ -233,7 +239,13 @@ test("foto posterior exige sessão e permissão de atuação antes de subir o ar
   assert.equal((await handler(build(false))).status, 401);
   assert.equal((await handler(build())).status, 403);
   assert.equal(uploads, 0);
-  db.rpc = async () => ({ data: { can_manage: true }, error: null });
+  db.rpc = async (name) => ({
+    data:
+      name === "viaalerta_my_account_status"
+        ? { state: "active", until: null, reason: null }
+        : { can_manage: true },
+    error: null,
+  });
   assert.equal((await handler(build())).status, 200);
   assert.equal(uploads, 1);
 });

@@ -25,6 +25,8 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase/client";
 import { roleLabels } from "@/lib/workflow";
 import { useRole } from "@/lib/use-role";
+import { useQuery } from "@tanstack/react-query";
+import { accountAccess } from "@/lib/account-access";
 const links = [
   { href: "/dashboard", label: "Visão geral", icon: LayoutDashboard },
   { href: "/mapa", label: "Mapa colaborativo", icon: Map },
@@ -86,6 +88,13 @@ export function Shell({
 }) {
   const { user, loading, demo, logout } = useAuth();
   const { role, staff, needsMfa } = useRole();
+  const access = useQuery({
+    queryKey: ["account-access", user?.id],
+    queryFn: () => accountAccess(supabase!),
+    enabled: !!user && !demo && !!supabase,
+    refetchInterval: 30000,
+    retry: false,
+  });
   const navigation = [
     ...links,
     { href: "/notificacoes", label: "Notificações", icon: Bell },
@@ -106,6 +115,61 @@ export function Shell({
       <div className="screen-loading">
         <span className="spinner" /> Carregando sua conta…
       </div>
+    );
+  if (
+    !publicMap &&
+    user &&
+    !demo &&
+    supabase &&
+    (access.isPending || access.isError || access.data?.state !== "active")
+  )
+    return (
+      <main className="privacy-page">
+        <section className="panel form-section stack">
+          <Logo />
+          <h1>
+            {access.isPending
+              ? "Conferindo sua conta…"
+              : access.error
+                ? "Não foi possível conferir o acesso"
+                : access.data?.state === "suspended"
+                  ? "Conta temporariamente suspensa"
+                  : "Conta banida do ViaAlerta"}
+          </h1>
+          {access.error && <p role="alert">{access.error.message}</p>}
+          {access.data?.reason && <p>Motivo: {access.data.reason}</p>}
+          {access.data?.until && (
+            <p>
+              Prazo informado:{" "}
+              {new Date(access.data.until).toLocaleString("pt-BR")}
+            </p>
+          )}
+          {!access.isPending && (
+            <>
+              <p>
+                Para solicitar revisão, entre em contato com{" "}
+                <a
+                  className="text-link"
+                  href="mailto:admin.via.alerta@gmail.com"
+                >
+                  admin.via.alerta@gmail.com
+                </a>
+                . Não envie sua senha.
+              </p>
+              <Button variant="outline" onClick={() => void access.refetch()}>
+                Conferir novamente
+              </Button>
+              <Button
+                onClick={() =>
+                  void logout().catch((e) => toast.error(e.message))
+                }
+              >
+                Sair da conta
+              </Button>
+            </>
+          )}
+        </section>
+      </main>
     );
   return (
     <div className="app-shell">
@@ -228,6 +292,7 @@ export function Shell({
         </main>
         <footer className="app-footer">
           ViaAlerta <span>Registros de problemas nas vias públicas.</span>
+          <Link href="/privacidade">Privacidade e LGPD</Link>
           <span>Projeto colaborativo · MVP</span>
         </footer>
       </div>

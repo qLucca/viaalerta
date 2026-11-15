@@ -309,6 +309,7 @@ export default function Home() {
         <div>
           <Link href="/mapa">Explorar mapa</Link>
           <Link href="/login">Minha conta</Link>
+          <Link href="/privacidade">Privacidade e LGPD</Link>
           <a href="#como-funciona">Como funciona</a>
         </div>
         <span>

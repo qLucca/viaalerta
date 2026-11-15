@@ -292,6 +292,19 @@ A validação com sessão real e o fluxo completo continuam necessários na Azur
 
 ## Publicação e arquivos locais
 
+O painel administrativo inclui indicadores de usuários, busca e paginação,
+revisão de denúncias, suspensão com prazo, banimento reversível e auditoria.
+As regras exigem administrador ativo com MFA e são aplicadas no banco e na API.
+Consulte [Administração e moderação](docs/ADMINISTRACAO.md) para a migração 005
+e os limites do bloqueio de conta.
+
+O perfil web oferece foto privada e preferências independentes para e-mail e WhatsApp.
+A segurança da conta inclui autenticador por QR Code e troca de senha. A página
+`/privacidade` descreve o tratamento de dados e os direitos relacionados à LGPD.
+Consulte [Conta, privacidade e comunicações](docs/COMUNICACOES.md) para a ordem de
+migração, publicação e ativação dos provedores. Salvar uma preferência não significa
+que os serviços de mensagens já estão ativos.
+
 O destino é Azure Container Apps, com um serviço para web e outro para API.
 A URL pública da API ainda precisa ser validada. O guia de publicação Azure é
 mantido somente na cópia local do projeto.

@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 import { readDemo, writeDemo } from "./demo";
 import { persistDemoPhoto } from "./demo-file";
 import { photoBytes } from "./photos";
+import { persistOnce } from "./submission";
 import type {
   Analysis,
   Bounds,
@@ -52,7 +53,7 @@ export async function listOccurrences(
   let query = supabase
     .from(options.mine || options.staff ? table : view)
     .select(
-      "id,latitude,longitude,image_path,status,detection_count,max_confidence,description,created_at,image_width,image_height,detections",
+      "id,latitude,longitude,image_path,status,detection_count,max_confidence,description,created_at,image_width,image_height,detections,analysis_state",
     )
     .order("created_at", { ascending: !!options.oldest })
     .order("id", { ascending: !!options.oldest });
@@ -90,8 +91,8 @@ export async function saveOccurrence(
   point: Point,
   description: string,
   demo: boolean,
+  id = Crypto.randomUUID(),
 ) {
-  const id = Crypto.randomUUID();
   const common = {
     id,
     latitude: point[0],
@@ -106,6 +107,14 @@ export async function saveOccurrence(
     image_width: analysis.image_width,
     image_height: analysis.image_height,
     detections: analysis.detections,
+    analysis_state: analysis.unavailable
+      ? ("not_requested" as const)
+      : ("completed" as const),
+    ai_feedback: analysis.unavailable ? "not_verified" : "confirmed",
+    human_has_pothole: analysis.unavailable
+      ? null
+      : analysis.detections.length > 0,
+    problem_type: "buraco",
   };
   if (demo || analysis.simulated) {
     const image_url = await persistDemoPhoto(photo.uri, id);
@@ -127,20 +136,30 @@ export async function saveOccurrence(
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Sua sessão expirou. Entre novamente.");
   const image_path = `${user.id}/${id}.jpg`;
-  const upload = await supabase.storage
-    .from(bucket)
-    .upload(image_path, await photoBytes(photo), { contentType: "image/jpeg" });
-  if (upload.error)
-    throw new Error("Não foi possível enviar a fotografia. Tente novamente.");
-  const { error } = await supabase
-    .from(table)
-    .insert({ ...common, user_id: user.id, image_path });
-  if (error) {
-    const cleanup = await supabase.storage.from(bucket).remove([image_path]);
-    if (cleanup.error)
-      console.warn("Falha ao remover a fotografia de um registro não salvo.");
-    throw new Error("Não foi possível salvar o registro. Tente novamente.");
-  }
+  await persistOnce({
+    exists: async () => {
+      const result = await supabase!
+        .from(table)
+        .select("id")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (result.error)
+        throw new Error(
+          "Não foi possível conferir o envio. Aguarde a conexão e tente novamente.",
+        );
+      return !!result.data;
+    },
+    upload: async () =>
+      supabase!.storage
+        .from(bucket)
+        .upload(image_path, await photoBytes(photo), {
+          contentType: "image/jpeg",
+          upsert: false,
+        }),
+    insert: async () =>
+      supabase!.from(table).insert({ ...common, user_id: user.id, image_path }),
+  });
   return { id, local: false };
 }
 

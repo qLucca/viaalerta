@@ -6,6 +6,8 @@ import { Shell } from "@/components/layout/shell";
 import { supabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/providers";
+import { authenticatorQr } from "@/lib/account";
+import { ChangePassword } from "@/components/change-password";
 export default function Security() {
   const { demo } = useAuth(),
     cache = useQueryClient();
@@ -20,6 +22,7 @@ export default function Security() {
     if (!supabase || demo) return;
     setBusy(true);
     setError("");
+    setMessage("");
     try {
       const list = await supabase.auth.mfa.listFactors();
       if (list.error) throw list.error;
@@ -33,15 +36,19 @@ export default function Security() {
         const previous = list.data.all.find(
           (f) => f.factor_type === "totp" && f.status === "unverified",
         );
-        if (previous)
-          await supabase.auth.mfa.unenroll({ factorId: previous.id });
+        if (previous) {
+          const removed = await supabase.auth.mfa.unenroll({
+            factorId: previous.id,
+          });
+          if (removed.error) throw removed.error;
+        }
         const result = await supabase.auth.mfa.enroll({
           factorType: "totp",
           friendlyName: "ViaAlerta",
         });
         if (result.error) throw result.error;
         setFactor(result.data.id);
-        setQr(result.data.totp.qr_code);
+        setQr(authenticatorQr(result.data.totp.qr_code));
         setSecret(result.data.totp.secret);
         setMessage(
           "Leia o QR com seu aplicativo autenticador. Depois informe o código de seis dígitos.",
@@ -56,7 +63,7 @@ export default function Security() {
     }
   }
   async function verify() {
-    if (!supabase) return;
+    if (!supabase || !factor || !/^\d{6}$/.test(code) || busy) return;
     setBusy(true);
     setError("");
     try {
@@ -97,17 +104,24 @@ export default function Security() {
               Use um aplicativo autenticador. Não compartilhe o QR, a chave ou
               os códigos de acesso.
             </p>
-            <Button onClick={start} disabled={busy}>
+            <Button onClick={start} disabled={busy || !!factor}>
               {busy ? "Preparando…" : "Configurar ou verificar duas etapas"}
             </Button>
             {qr && (
-              <Image
-                unoptimized
-                src={qr}
-                width={220}
-                height={220}
-                alt="QR para cadastrar a conta no aplicativo autenticador"
-              />
+              <div className="authenticator-qr">
+                <Image
+                  unoptimized
+                  src={qr}
+                  width={220}
+                  height={220}
+                  alt="QR para cadastrar a conta no aplicativo autenticador"
+                />
+                <p>
+                  Abra seu aplicativo autenticador, escolha adicionar uma conta
+                  e escaneie este QR Code. No mesmo celular, use a chave manual
+                  abaixo.
+                </p>
+              </div>
             )}
             {secret && (
               <details>
@@ -148,6 +162,7 @@ export default function Security() {
         {message && <p role="status">{message}</p>}
         {error && <p role="alert">{error}</p>}
       </section>
+      {!demo && <ChangePassword />}
     </Shell>
   );
 }

@@ -34,12 +34,14 @@ export function AuthForm({ mode }: { mode: Mode }) {
         (name.trim().length < 2 || name.trim().length > 80)
       )
         throw new Error("Use um nome entre 2 e 80 caracteres.");
-      if (mode !== "recover" && password.length < (mode === "login" ? 1 : 8))
+      if (mode !== "recover" && password.length < (mode === "login" ? 1 : 12))
         throw new Error(
           mode === "login"
             ? "Informe sua senha."
-            : "Use uma senha com pelo menos 8 caracteres.",
+            : "Use uma senha com pelo menos 12 caracteres.",
         );
+      if ((mode === "signup" || mode === "reset") && password.length > 128)
+        throw new Error("Use até 128 caracteres.");
       if ((mode === "signup" || mode === "reset") && password !== confirmation)
         throw new Error("As senhas devem ser iguais.");
       if (!supabase)

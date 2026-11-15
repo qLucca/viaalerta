@@ -194,6 +194,10 @@ function fakeDatabase({
 } = {}) {
   const calls = { uploads: [], inserts: [], removes: [], lookups: 0 };
   const db = {
+    rpc: async () => ({
+      data: { state: "active", until: null, reason: null },
+      error: null,
+    }),
     auth: {
       getUser: async () => ({
         data: { user: validUser ? { id: actor } : null },

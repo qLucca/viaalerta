@@ -10,6 +10,7 @@ import { useAuth } from "@/components/providers";
 import { Logo, ThemeSwitch } from "@/components/layout/shell";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase/client";
+import { passwordProblem } from "@/lib/account";
 type Mode = "login" | "signup" | "recover" | "reset";
 type Fields = {
   name: string;
@@ -44,23 +45,20 @@ export function AuthForm({ mode }: { mode: Mode }) {
         path: ["name"],
         message: "O nome deve ter entre 2 e 80 caracteres.",
       });
-    if (mode !== "recover" && d.password.length < (mode === "login" ? 1 : 8))
+    if (mode === "login" && !d.password)
       c.addIssue({
         code: "custom",
         path: ["password"],
-        message:
-          mode === "login"
-            ? "Informe sua senha."
-            : "Use pelo menos 8 caracteres.",
+        message: "Informe sua senha.",
       });
     if (
       (mode === "signup" || mode === "reset") &&
-      d.password !== d.confirmation
+      passwordProblem(d.password, d.confirmation)
     )
       c.addIssue({
         code: "custom",
-        path: ["confirmation"],
-        message: "As senhas precisam ser iguais.",
+        path: [d.password !== d.confirmation ? "confirmation" : "password"],
+        message: passwordProblem(d.password, d.confirmation),
       });
   });
   const {
@@ -351,8 +349,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
             )}
           </p>
           <div className="auth-privacy">
-            <ShieldCheck size={15} /> Seus dados são usados apenas para sua
-            conta e seus registros.
+            <ShieldCheck size={15} />
+            <Link href="/privacidade">
+              Como seus dados são usados: privacidade e LGPD
+            </Link>
           </div>
         </div>
       </main>

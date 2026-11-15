@@ -26,6 +26,11 @@ jobs:
         working-directory: mobile
       - run: npm test && npm run typecheck && npm run lint
         working-directory: web
+      - name: Compilar web para produção
+        run: npm run build
+        working-directory: web
+      - name: Testar autorização e envio de notificações
+        run: node --test supabase/functions/send-notifications/worker.test.mjs supabase/functions/send-notifications/whatsapp.test.mjs
       - run: npm test && npm run typecheck
         working-directory: mobile
       - name: Testar HTTP sem instalar pesos ou iniciar treinamento

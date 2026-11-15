@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { boundedForm, RequestError, sanitizePhoto } from "./registrations.ts";
+import { accountAccess } from "../account-access.ts";
 export function interventionHandler(
   factory: (url: string, key: string, token: string) => SupabaseClient = (
     url,
@@ -26,6 +27,17 @@ export function interventionHandler(
         auth = await db.auth.getUser(token);
       if (auth.error || !auth.data.user)
         throw new RequestError("Sessão inválida.", 401);
+      let access;
+      try {
+        access = await accountAccess(db);
+      } catch {
+        throw new RequestError(
+          "Não foi possível conferir a situação da conta.",
+          503,
+        );
+      }
+      if (access.state !== "active")
+        throw new RequestError("Conta suspensa ou banida do ViaAlerta.", 403);
       const form = await boundedForm(request),
         file = form.get("file"),
         id = form.get("id");

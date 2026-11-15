@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+} from "react";
 import { AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Linking from "expo-linking";
@@ -7,6 +13,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { ThemeProvider } from "./theme";
+import { AccountAccess } from "./components/AccountAccess";
 type User = { id: string; name: string; email: string };
 type Auth = {
   user: User | null;
@@ -174,7 +181,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <Context.Provider
           value={{ user, loading, demo, enterDemo, logout, rename, authError }}
         >
-          {children}
+          <AccountAccess userId={session?.user.id} demo={demo} logout={logout}>
+            {children}
+          </AccountAccess>
         </Context.Provider>
       </ThemeProvider>
     </QueryClientProvider>

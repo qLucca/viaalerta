@@ -18,6 +18,7 @@ export type Analysis = {
   image_width: number;
   image_height: number;
   simulated: boolean;
+  unavailable?: boolean;
 };
 export type Photo = {
   uri: string;
@@ -42,6 +43,7 @@ export type Occurrence = {
   image_width?: number;
   image_height?: number;
   detections?: Detection[];
+  analysis_state?: "legacy" | "completed" | "failed" | "not_requested";
   simulated?: boolean;
 };
 export type Bounds = {

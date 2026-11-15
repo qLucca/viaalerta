@@ -1,12 +1,15 @@
 "use client";
 import Link from "next/link";
-import {roleLabels} from "@/lib/workflow";
+import { roleLabels } from "@/lib/workflow";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Shell } from "@/components/layout/shell";
 import { useRole } from "@/lib/use-role";
 import { accessAction, listStaff } from "@/lib/api/process";
 import { Button } from "@/components/ui/button";
+import { AdminUsers } from "@/components/admin-users";
+import { AdminReports } from "@/components/admin-reports";
+import { auditActionLabels } from "@/lib/admin";
 type Request = {
   id: string;
   email: string;
@@ -15,17 +18,14 @@ type Request = {
   organization: string;
   state: string;
 };
-type Report = {
-  occurrence_id: string;
-  reason: string;
-  description: string;
-  created_at: string;
-};
 type Audit = {
   id: number;
   action: string;
   entity_id: string;
   created_at: string;
+  actor_email?: string;
+  subject_email?: string;
+  reason?: string;
 };
 export default function Administration() {
   const { role, needsMfa, pending, error: roleError } = useRole(),
@@ -39,11 +39,6 @@ export default function Administration() {
     enabled,
   });
   const staff = useQuery({ queryKey: ["staff"], queryFn: listStaff, enabled });
-  const reports = useQuery<Report[]>({
-    queryKey: ["reports"],
-    queryFn: () => accessAction("viaalerta_admin_reports"),
-    enabled,
-  });
   const audit = useQuery<Audit[]>({
     queryKey: ["audit"],
     queryFn: () => accessAction("viaalerta_admin_audit"),
@@ -79,6 +74,8 @@ export default function Administration() {
         </Link>
       ) : (
         <div className="stack">
+          <AdminUsers />
+          <AdminReports />
           <section className="panel form-section stack">
             <h2>Solicitações institucionais</h2>
             <p>
@@ -98,7 +95,13 @@ export default function Administration() {
                   <p>
                     {r.email} · {r.municipality} ·{" "}
                     {r.requested_role === "manager" ? "Gestor" : "Agente"} ·{" "}
-                    {({pending:"Aguardando revisão",approved:"Aprovado",rejected:"Rejeitado"} as Record<string,string>)[r.state]||r.state}
+                    {(
+                      {
+                        pending: "Aguardando revisão",
+                        approved: "Aprovado",
+                        rejected: "Rejeitado",
+                      } as Record<string, string>
+                    )[r.state] || r.state}
                   </p>
                   {r.state === "pending" && (
                     <div className="actions">
@@ -159,71 +162,17 @@ export default function Administration() {
             ))}
           </section>
           <section className="panel form-section stack">
-            <h2>Denúncias recentes</h2>
-            <p>
-              Ocultar retira o registro do mapa e das listas públicas; não apaga
-              a foto já compartilhada. Para remover o arquivo, acione o
-              responsável pela implantação.
-            </p>
-            {reports.error ? (
-              <p role="alert">{reports.error.message}</p>
-            ) : !reports.data?.length ? (
-              <p>Nenhuma denúncia recebida.</p>
-            ) : (
-              reports.data.map((r, i) => (
-                <article key={r.occurrence_id + i} className="process-event">
-                  <Link
-                    className="text-link"
-                    href={`/ocorrencias/${r.occurrence_id}`}
-                  >
-                    Abrir registro
-                  </Link>
-                  <p>
-                    {r.reason} · {r.description}
-                  </p>
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => {
-                      const reason = prompt(
-                        "Descreva o motivo da ocultação (mínimo 5 caracteres).",
-                      );
-                      if (reason && reason.trim().length >= 5)
-                        void act("viaalerta_moderate_record", {
-                          p_id: r.occurrence_id,
-                          p_hide: true,
-                          p_reason: reason,
-                        });
-                    }}
-                  >
-                    Ocultar após revisão
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() =>
-                      act("viaalerta_moderate_record", {
-                        p_id: r.occurrence_id,
-                        p_hide: false,
-                        p_reason:
-                          "Registro restaurado após revisão administrativa",
-                      })
-                    }
-                  >
-                    Restaurar após revisão
-                  </Button>
-                </article>
-              ))
-            )}
-          </section>
-          <section className="panel form-section stack">
             <h2>Auditoria recente</h2>
             {audit.error ? (
               <p role="alert">{audit.error.message}</p>
             ) : (
               audit.data?.map((a) => (
                 <p key={a.id}>
-                  {a.created_at} · {a.action} · {a.entity_id}
+                  {new Date(a.created_at).toLocaleString("pt-BR")} ·{" "}
+                  {auditActionLabels[a.action] || a.action}
+                  {a.actor_email && ` · Por ${a.actor_email}`}
+                  {` · ${a.subject_email || a.entity_id}`}
+                  {a.reason && ` · ${a.reason}`}
                 </p>
               ))
             )}

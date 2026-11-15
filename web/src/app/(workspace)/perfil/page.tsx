@@ -9,6 +9,7 @@ import { useAuth } from "@/components/providers";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase/client";
 import { countOccurrences } from "@/lib/api/occurrences";
+import { AccountSettings } from "@/components/account-settings";
 export default function Profile() {
   const { user } = useAuth();
   return <ProfileContent key={`${user?.id}:${user?.name}`} />;
@@ -119,6 +120,7 @@ function ProfileContent() {
           </div>
         </section>
       </div>
+      <AccountSettings />
     </Shell>
   );
 }

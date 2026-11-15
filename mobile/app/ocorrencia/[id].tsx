@@ -83,11 +83,16 @@ export default function Detail() {
           <Section title="O que foi identificado" />
           <Card>
             <Txt style={{ fontSize: 21, fontWeight: "700" }}>
-              {r.detection_count}{" "}
-              {r.detection_count === 1 ? "detecção" : "detecções"}
+              {r.analysis_state === "not_requested" ||
+              r.analysis_state === "failed"
+                ? "Sem análise automática"
+                : `${r.detection_count} ${r.detection_count === 1 ? "detecção" : "detecções"}`}
             </Txt>
             <Txt muted style={{ fontSize: 12, marginTop: 6 }}>
-              {Math.round(r.max_confidence * 100)}% de confiança máxima
+              {r.analysis_state === "not_requested" ||
+              r.analysis_state === "failed"
+                ? "Registro encaminhado para avaliação humana."
+                : `${Math.round(r.max_confidence * 100)}% de confiança máxima`}
               {r.simulated ? " · simulação" : ""}
             </Txt>
             <Txt muted style={{ fontSize: 11, lineHeight: 19, marginTop: 15 }}>

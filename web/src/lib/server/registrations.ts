@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import sharp from "sharp";
 import { validateRegistration } from "../registration.ts";
+import { accountAccess } from "../account-access.ts";
 
 const LIMIT = 8 * 1024 * 1024,
   BODY_LIMIT = LIMIT + 64 * 1024;
@@ -104,6 +105,17 @@ export function registrationHandler(
         auth = await db.auth.getUser(token);
       if (auth.error || !auth.data.user)
         throw new RequestError("Sua sessão expirou. Entre novamente.", 401);
+      let access;
+      try {
+        access = await accountAccess(db);
+      } catch {
+        throw new RequestError(
+          "Não foi possível conferir a situação da conta.",
+          503,
+        );
+      }
+      if (access.state !== "active")
+        throw new RequestError("Conta suspensa ou banida do ViaAlerta.", 403);
       const form = await boundedForm(request),
         file = form.get("file"),
         raw = form.get("data");

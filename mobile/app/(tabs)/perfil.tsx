@@ -3,6 +3,7 @@ import { View, Pressable } from "react-native";
 import { router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Sun, Moon, Monitor, LogOut } from "lucide-react-native";
+import Constants from "expo-constants";
 import {
   Screen,
   Txt,
@@ -62,6 +63,11 @@ export default function Profile() {
     <Screen title="Meu perfil" subtitle="Seu espaço. Suas contribuições.">
       {!demo && (
         <Card>
+          <Button
+            title="Foto e preferências de contato"
+            onPress={() => router.push("/conta")}
+            outline
+          />
           <Button
             title="Segurança e autenticador"
             onPress={() => router.push("/seguranca")}
@@ -199,7 +205,7 @@ export default function Profile() {
         style={{ marginTop: 22 }}
       />
       <Txt muted style={{ fontSize: 9, textAlign: "center", marginTop: 22 }}>
-        ViaAlerta Android · 1.0.0
+        ViaAlerta Android · {Constants.expoConfig?.version || "1.0.2"}
       </Txt>
     </Screen>
   );

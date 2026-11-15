@@ -157,7 +157,12 @@ def main():
                         headers = {'Authorization': 'Bearer token-teste'}
                         usuario = 'eb367c20-4a16-4ee1-9aa5-283324c36817'
                         auth_mock = AsyncMock(return_value=httpx.Response(200, json={'id': usuario}))
-                        with patch.object(module.app.state.auth_http, 'get', auth_mock):
+                        with patch.object(module.app.state.auth_http, 'get', auth_mock), patch.object(module.app.state.auth_http, 'post', AsyncMock(return_value=httpx.Response(200, json={'state': 'active'}))):
+                            with patch.object(module.app.state.auth_http, 'post', AsyncMock(return_value=httpx.Response(200, json={'state': 'banned'}))):
+                                assert client.post('/detect', files=files, headers=headers).status_code == 403
+                            with patch.object(module.app.state.auth_http, 'post', AsyncMock(return_value=httpx.Response(503))):
+                                assert client.post('/detect', files=files, headers=headers).status_code == 503
+                            passed('Conta banida e falha ao consultar restricao impedem inferencia')
                             for _ in range(10):
                                 assert client.post('/detect', files=files, headers=headers).status_code == 200
                             assert client.post('/detect', files=files, headers=headers).status_code == 429

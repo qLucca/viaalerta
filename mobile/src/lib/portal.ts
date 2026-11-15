@@ -1,7 +1,12 @@
 import { Linking } from "react-native";
-export function portalUrl(
-  path: "/seguranca" | "/administracao" | "/acesso-municipal",
-) {
+type PortalPath =
+  | "/seguranca"
+  | "/administracao"
+  | "/acesso-municipal"
+  | "/perfil"
+  | "/privacidade"
+  | "/api/profile-photo";
+export function portalUrl(path: PortalPath) {
   const url = new URL(
     process.env.EXPO_PUBLIC_WEB_URL ||
       "https://viaalerta-web.lemonground-59ee7d93.centralus.azurecontainerapps.io",
@@ -13,8 +18,6 @@ export function portalUrl(
   url.hash = "";
   return url.toString();
 }
-export async function openPortal(
-  path: "/seguranca" | "/administracao" | "/acesso-municipal",
-) {
+export async function openPortal(path: PortalPath) {
   await Linking.openURL(portalUrl(path));
 }

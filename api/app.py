@@ -158,6 +158,20 @@ async def exigir_usuario(
     except (ValueError, KeyError, TypeError) as erro:
         raise HTTPException(503, "Não foi possível confirmar a sessão.") from erro
 
+    try:
+        situacao = await app.state.auth_http.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/viaalerta_my_account_status",
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {credencial.credentials}"}, json={},
+        )
+        if situacao.status_code == 404 and situacao.json().get("code") == "PGRST202":
+            pass  # A restrição só existe depois de instalar a migração 005.
+        elif situacao.status_code != 200 or situacao.json().get("state") not in ("active", "suspended", "banned"):
+            raise HTTPException(503, "Não foi possível conferir a situação da conta.")
+        elif situacao.json()["state"] != "active":
+            raise HTTPException(403, "Conta suspensa ou banida do ViaAlerta.")
+    except (httpx.HTTPError, ValueError, AttributeError) as erro:
+        raise HTTPException(503, "Não foi possível conferir a situação da conta.") from erro
+
     agora = time.monotonic()
     for chave in list(limites_usuario):
         if not limites_usuario[chave] or limites_usuario[chave][-1] <= agora - 60:

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import * as Crypto from "expo-crypto";
 import { View, Pressable, Switch } from "react-native";
 import { router } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -35,9 +36,9 @@ export default function Register() {
   const [step, setStep] = useState(0);
   const [photo, setPhoto] = useState<Photo>();
   const [analysis, setAnalysis] = useState<Analysis>();
-  const [point, setPoint] = useState<Point>([-23.552, -46.65]);
-  const [latitude, setLatitude] = useState("-23.552");
-  const [longitude, setLongitude] = useState("-46.650");
+  const [point, setPoint] = useState<Point>([-18.9186, -48.2772]);
+  const [latitude, setLatitude] = useState("-18.9186");
+  const [longitude, setLongitude] = useState("-48.2772");
   const [chosen, setChosen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [empty, setEmpty] = useState(false);
@@ -46,12 +47,33 @@ export default function Register() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const simulated = demo || mockDetection;
+  const submission = useRef<{
+    id: string;
+    photo: Photo;
+    analysis: Analysis;
+    point: Point;
+    notes: string;
+    demo: boolean;
+  } | null>(null);
   useEffect(() => {
     let active = true;
-    recoverPhoto().then(selected => {
-      if (active && selected) { setPhoto(selected); setAnalysis(undefined); setStep(1); setConfirmed(false); setConsent(false); setChosen(false); }
-    }).catch(e => { if (active) setError((e as Error).message); });
-    return () => { active = false; };
+    recoverPhoto()
+      .then((selected) => {
+        if (active && selected) {
+          setPhoto(selected);
+          setAnalysis(undefined);
+          setStep(1);
+          setConfirmed(false);
+          setConsent(false);
+          setChosen(false);
+        }
+      })
+      .catch((e) => {
+        if (active) setError((e as Error).message);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
   async function choose(source: "camera" | "gallery" | "example") {
     setBusy(true);
@@ -62,6 +84,7 @@ export default function Register() {
           ? await examplePhoto()
           : await pickPhoto(source === "camera");
       if (selected) {
+        submission.current = null;
         setPhoto(selected);
         setAnalysis(undefined);
         setChosen(false);
@@ -127,13 +150,24 @@ export default function Register() {
     setBusy(true);
     setError("");
     try {
-      const result = await saveOccurrence(
+      submission.current ??= {
+        id: Crypto.randomUUID(),
         photo,
         analysis,
-        point,
-        notes.trim(),
+        point: [...point],
+        notes: notes.trim(),
         demo,
+      };
+      const draft = submission.current;
+      const result = await saveOccurrence(
+        draft.photo,
+        draft.analysis,
+        draft.point,
+        draft.notes,
+        draft.demo,
+        draft.id,
       );
+      submission.current = null;
       await cache.invalidateQueries();
       setStep(0);
       setPhoto(undefined);
@@ -264,7 +298,7 @@ export default function Register() {
             JPG, PNG ou formatos aceitos pelo aparelho. A foto é preparada em
             JPEG com até 8 MB antes do envio.
           </Txt>
-          {simulated && (
+          {demo && (
             <Button
               title="Usar foto ilustrativa de exemplo"
               outline
@@ -332,6 +366,23 @@ export default function Register() {
             </Card>
           )}
           <Button
+            title="Continuar sem análise da IA"
+            outline
+            disabled={busy}
+            onPress={() => {
+              setAnalysis({
+                detections: [],
+                image_width: photo.width,
+                image_height: photo.height,
+                simulated: demo,
+                unavailable: true,
+              });
+              setError("");
+              setStep(2);
+            }}
+            style={{ marginTop: 12 }}
+          />
+          <Button
             title="Continuar para localização"
             onPress={() => {
               setError("");
@@ -365,7 +416,7 @@ export default function Register() {
           >
             Onde a foto foi tirada?
           </Txt>
-          <Notice text="O ponto inicial em São Paulo é só referência. Sua localização atual pode ser diferente do local de uma foto da galeria." />
+          <Notice text="O ponto inicial em Uberlândia é só referência. Sua localização atual pode ser diferente do local de uma foto da galeria." />
           <Button
             title="Usar minha localização atual"
             busy={busy}
@@ -444,10 +495,14 @@ export default function Register() {
           <Card style={{ gap: 13, marginBottom: 22 }}>
             <View>
               <Txt muted style={{ fontSize: 10 }}>
-                RESULTADO {analysis.simulated ? "SIMULADO" : "DA IA"}
+                {analysis.unavailable
+                  ? "REGISTRO SEM ANÁLISE AUTOMÁTICA"
+                  : `RESULTADO ${analysis.simulated ? "SIMULADO" : "DA IA"}`}
               </Txt>
               <Txt style={{ fontSize: 13, fontWeight: "600", marginTop: 4 }}>
-                {analysis.detections.length} detecção ·{" "}
+                {analysis.unavailable
+                  ? "Não analisado · "
+                  : `${analysis.detections.length} detecção · `}
                 {Math.round(
                   Math.max(0, ...analysis.detections.map((d) => d.confidence)) *
                     100,
@@ -516,6 +571,12 @@ export default function Register() {
           </Pressable>
           {analysis.simulated && (
             <Notice text="Esta análise é simulada: o registro ficará apenas neste aparelho e não será enviado ao Supabase." />
+          )}
+          {analysis.unavailable && (
+            <Notice text="A IA não analisou esta foto. O registro será enviado para avaliação humana, sem afirmar que nenhum buraco foi encontrado." />
+          )}
+          {submission.current && (
+            <Notice text="Uma tentativa anterior está pendente de confirmação. Repetir o envio preserva a foto e os dados dessa tentativa. Escolha uma nova foto para iniciar outro registro." />
           )}
           <Button
             title="Registrar ocorrência"
