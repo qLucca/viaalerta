@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       model_release:
-        description: Tag da Release privada que contém best.pt e SHA256SUMS.txt
+        description: Tag da Release que contém best.pt e SHA256SUMS.txt
         required: true
-        default: modelo-v1
+        default: modelo-buracos-v2-20261116
         type: string
       diagnose_only:
         description: Consultar estado e logs da API existente, sem publicar

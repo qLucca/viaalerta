@@ -85,7 +85,7 @@ py -3.11 -m venv .venv
 ```
 
 O checkpoint não acompanha o Git. Baixe `best.pt` e `SHA256SUMS.txt` da Release
-privada `modelo-v1` e coloque-os em `api/models/`. O dataset não é necessário para
+`modelo-buracos-v2-20261116` e coloque-os em `api/models/`. O dataset não é necessário para
 executar a API. A inicialização recusa um modelo diferente de `EXPECTED_MODEL_SHA256`.
 
 Crie o arquivo local `api/.env` com as variáveis descritas abaixo e inicie:
@@ -181,22 +181,25 @@ As fotografias compartilhadas não recebem anonimização automática de rostos 
 Checkpoint atual:
 
 ```text
-notebooks/treinamentos/buracos_aug_nativo_01/yolo_300ep-3/weights/best.pt
+notebooks/treinamentos/buracos_finetune_20261116-000652/detector/weights/best.pt
 ```
 
-SHA-256: `842e84e869f3ffbd00945c31f3e6f5736c9f6e79743ae0e5f9d0e1d6cdafdb26`.
+SHA-256: `9608d50fa2cf70fb6866e03e674475b72b2aa1db0658bb681d44ce2b3f092f93`.
 
-O treinamento YOLO11s terminou após 77 épocas por early stopping; a melhor época
-informada pelo log foi a 57. Os detalhes, as fontes do dataset e os limites da
-avaliação estão em [notebooks/README.md](notebooks/README.md).
+O detector YOLO11s reconhece uma classe, `buraco`. A versão atual resulta de ajuste
+fino do detector anterior com a base filtrada para essa classe. As métricas abaixo
+são da execução `buracos_finetune_20261116-000652`.
 
 | Divisão   |  mAP50 | mAP50–95 | Precisão | Recall |
 | --------- | -----: | -------: | -------: | -----: |
-| Validação | 0,5326 |   0,2319 |   0,6580 | 0,4620 |
-| Teste     | 0,5243 |   0,2285 |   0,6518 | 0,4732 |
+| Validação | 0,6143 |   0,2915 |   0,6958 | 0,5535 |
+| Teste     | 0,6123 |   0,2979 |   0,6812 | 0,5500 |
 
-Essas métricas são do arquivo de avaliação atual. A acurácia de presença por imagem
-não mede a qualidade da localização das caixas.
+No mesmo conjunto de teste, o detector anterior obteve mAP50 de 0,5051, mAP50–95
+de 0,2362, precisão de 0,6603 e recall de 0,4578. Esses resultados não eliminam
+falsos positivos ou buracos não detectados. A acurácia de presença por imagem não
+mede a qualidade da localização das caixas. A Release `modelo-v1` preserva o
+checkpoint anterior para reversão.
 
 ## Fluxo de registro na web
 

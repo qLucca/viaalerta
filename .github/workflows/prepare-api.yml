@@ -3,8 +3,8 @@ on:
   workflow_dispatch:
     inputs:
       model_release:
-        description: Release privada com o checkpoint treinado
-        default: modelo-v1
+        description: Release com o checkpoint treinado
+        default: modelo-buracos-v2-20261116
         required: true
         type: string
 permissions:
