@@ -87,13 +87,28 @@ export default function Profile() {
           )}
           {role === "admin" && (
             <Button
-              title="Administração de acessos"
+              title="Administração e moderação"
               onPress={() => router.push("/administracao")}
               outline
             />
           )}
+          <Button
+            title="Solicitar acesso institucional"
+            outline
+            onPress={() => router.push("/acesso-municipal")}
+          />
+          <Button
+            title="Rascunhos neste aparelho"
+            outline
+            onPress={() => router.push("/rascunhos")}
+          />
         </Card>
       )}
+      <Button
+        title="Privacidade e proteção de dados"
+        outline
+        onPress={() => router.push("/privacidade")}
+      />
       <Card>
         <View
           style={{

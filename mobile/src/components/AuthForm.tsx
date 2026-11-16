@@ -279,8 +279,13 @@ export function AuthForm({ mode }: { mode: Mode }) {
           marginTop: 20,
         }}
       >
-        Usamos seus dados apenas para sua conta e seus registros.
+        Usamos seus dados para a conta, registros e proteção da comunidade.
       </Txt>
+      <Button
+        title="Privacidade e uso dos dados"
+        outline
+        onPress={() => router.push("/privacidade")}
+      />
     </Screen>
   );
 }

@@ -1,8 +1,8 @@
 {
   "name": "viaalerta-android",
-  "description": "ViaAlerta Android — mapa colaborativo e registro de buracos, integrado ao ViaAlerta web.",
+  "description": "ViaAlerta Android â€” mapa colaborativo e registro de buracos, integrado ao ViaAlerta web.",
   "license": "0BSD",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "type": "module",
   "main": "expo-router/entry",
   "dependencies": {

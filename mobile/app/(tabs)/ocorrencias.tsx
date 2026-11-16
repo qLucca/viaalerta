@@ -122,7 +122,9 @@ export default function Records() {
       ) : isPending ? (
         <Loading />
       ) : sorted.length ? (
-        sorted.map((record) => <RecordCard key={record.id} record={record} />)
+        sorted.map((record) => (
+          <RecordCard key={record.id} record={record} mine />
+        ))
       ) : (
         <Empty text="Nenhum registro com este filtro. Que tal fazer sua primeira contribuição?" />
       )}

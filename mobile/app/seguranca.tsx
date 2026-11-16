@@ -80,7 +80,7 @@ export default function Security() {
           (f) => f.factor_type === "totp" && f.status === "verified",
         );
       if (!factor)
-        throw new Error("Configure primeiro o autenticador no portal web.");
+        throw new Error("Configure primeiro o autenticador nesta tela.");
       const result = await supabase!.auth.mfa.challengeAndVerify({
         factorId: factor.id,
         code,

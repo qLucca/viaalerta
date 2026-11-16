@@ -29,6 +29,10 @@ export type Photo = {
   mime: "image/jpeg";
 };
 export type Occurrence = {
+  problem_type?: import("./lib/registration").ProblemType;
+  owner_id?: string;
+  cancelled_at?: string | null;
+  hidden_at?: string | null;
   id: string;
   latitude: number;
   longitude: number;

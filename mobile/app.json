@@ -3,7 +3,7 @@
     "name": "ViaAlerta",
     "slug": "viaalerta-android",
     "scheme": "viaalerta",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "platforms": [
       "android",
@@ -13,7 +13,7 @@
     "icon": "./assets/icon.png",
     "android": {
       "package": "com.viaalerta.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#247D61"
@@ -40,15 +40,15 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Escolha uma fotografia para registrar uma ocorrência.",
-          "cameraPermission": "Use a câmera para fotografar um buraco com segurança.",
+          "photosPermission": "Escolha uma fotografia para registrar uma ocorrÃªncia.",
+          "cameraPermission": "Use a cÃ¢mera para fotografar um buraco com seguranÃ§a.",
           "microphonePermission": false
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Confirme o local da ocorrência. Sua localização não é acompanhada em segundo plano."
+          "locationWhenInUsePermission": "Confirme o local da ocorrÃªncia. Sua localizaÃ§Ã£o nÃ£o Ã© acompanhada em segundo plano."
         }
       ]
     ]

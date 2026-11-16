@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as Crypto from "expo-crypto";
 import { View, Pressable, Switch, Platform } from "react-native";
 import { router } from "expo-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Camera,
   ImagePlus,
@@ -27,7 +27,13 @@ import { pickPhoto, examplePhoto, recoverPhoto } from "../../src/lib/photos";
 import { analyzePhoto, mockDetection } from "../../src/lib/detection";
 import { currentFix } from "../../src/lib/location";
 import { offlineDrafts } from "../../src/lib/offline";
-import { saveOccurrence } from "../../src/lib/occurrences";
+import { saveOccurrence, listOccurrences } from "../../src/lib/occurrences";
+import {
+  problemTypes,
+  nearbyRecords,
+  type ProblemType,
+} from "../../src/lib/registration";
+import { Choices } from "../../src/components/Choices";
 import Map from "../../src/map/Map";
 import type { Analysis, Photo, Point } from "../../src/types";
 export default function Register() {
@@ -48,6 +54,30 @@ export default function Register() {
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [type, setType] = useState<ProblemType>("buraco"),
+    [danger, setDanger] = useState(false),
+    [human, setHuman] = useState(""),
+    [different, setDifferent] = useState(false);
+  const neighbors = useQuery({
+    queryKey: ["nearby", user?.id, demo, point, type],
+    enabled: step === 3 && chosen && !!user,
+    retry: false,
+    queryFn: async () =>
+      nearbyRecords(
+        await listOccurrences(demo, {
+          bounds: {
+            south: point[0] - 0.001,
+            north: point[0] + 0.001,
+            west: point[1] - 0.001,
+            east: point[1] + 0.001,
+          },
+          type,
+          limit: 100,
+        }),
+        point,
+        type,
+      ),
+  });
   const simulated = demo || mockDetection;
   const locationGeneration = useRef(0);
   const submission = useRef<{
@@ -57,6 +87,9 @@ export default function Register() {
     point: Point;
     notes: string;
     demo: boolean;
+    type: ProblemType;
+    danger: boolean;
+    human: boolean | null;
   } | null>(null);
   useEffect(() => {
     let active = true;
@@ -91,6 +124,8 @@ export default function Register() {
         submission.current = null;
         setPhoto(selected);
         setAnalysis(undefined);
+        setHuman("");
+        setDifferent(false);
         setChosen(false);
         setConfirmed(false);
         setConsent(false);
@@ -103,11 +138,12 @@ export default function Register() {
     }
   }
   async function analyze() {
-    if (!photo) return;
+    if (!photo || type !== "buraco") return;
     setBusy(true);
     setError("");
     try {
       setAnalysis(await analyzePhoto(photo, demo, empty));
+      setHuman("");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -117,6 +153,7 @@ export default function Register() {
   function changePoint(next: Point) {
     locationGeneration.current++;
     setConsent(false);
+    setDifferent(false);
     setAccuracy(undefined);
     setPoint(next);
     setLatitude(String(next[0]));
@@ -176,6 +213,7 @@ export default function Register() {
         pending?.photo ?? photo,
         pending?.point ?? point,
         pending?.notes ?? notes.trim(),
+        { type: pending?.type ?? type, danger: pending?.danger ?? danger },
       );
       submission.current = null;
       setStep(0);
@@ -198,6 +236,14 @@ export default function Register() {
     setBusy(true);
     setError("");
     try {
+      if (!analysis.unavailable && !human)
+        throw Error("Confira se há buraco na fotografia antes de publicar.");
+      if (neighbors.isPending || neighbors.isFetching)
+        throw Error("Aguarde a consulta de registros próximos.");
+      if ((neighbors.error || neighbors.data?.length) && !different)
+        throw Error(
+          "Confira os registros próximos ou confirme que é outro problema.",
+        );
       submission.current ??= {
         id: Crypto.randomUUID(),
         photo,
@@ -205,6 +251,9 @@ export default function Register() {
         point: [...point],
         notes: notes.trim(),
         demo,
+        type,
+        danger,
+        human: analysis.unavailable ? null : human === "yes",
       };
       const draft = submission.current;
       const result = await saveOccurrence(
@@ -214,6 +263,8 @@ export default function Register() {
         draft.notes,
         draft.demo,
         draft.id,
+        undefined,
+        { type: draft.type, danger: draft.danger, human: draft.human },
       );
       submission.current = null;
       await cache.invalidateQueries();
@@ -236,7 +287,7 @@ export default function Register() {
   }
   return (
     <Screen
-      title="Registrar buraco"
+      title="Registrar problema na via"
       subtitle="Uma foto pode ser o começo de um caminho melhor."
     >
       {Platform.OS !== "web" && !demo && (
@@ -368,6 +419,19 @@ export default function Register() {
       )}
       {step === 1 && photo && (
         <>
+          <Choices
+            label="Tipo de problema"
+            value={type}
+            options={problemTypes}
+            disabled={busy}
+            onChange={(v) => {
+              setType(v as ProblemType);
+              setAnalysis(undefined);
+              setHuman("");
+              setDifferent(false);
+              submission.current = null;
+            }}
+          />
           <DetectionImage
             uri={photo.uri}
             width={photo.width}
@@ -405,9 +469,13 @@ export default function Register() {
           <Button
             title="Analisar imagem"
             busy={busy}
+            disabled={type !== "buraco"}
             onPress={analyze}
             icon={<ScanLine size={18} color={colors.onGreen} />}
           />
+          {type !== "buraco" && (
+            <Notice text="O modelo identifica apenas buracos. Para este tipo, continue sem análise da IA e encaminhe para avaliação humana." />
+          )}
           {analysis && (
             <Card style={{ marginTop: 17 }}>
               <Txt style={{ fontSize: 17, fontWeight: "700" }}>
@@ -421,6 +489,15 @@ export default function Register() {
                   : "Você pode registrar o problema mesmo assim, após conferir a foto."}
               </Txt>
             </Card>
+          )}
+          {analysis && !analysis.unavailable && (
+            <Choices
+              label="Você identifica buraco na fotografia?"
+              value={human}
+              options={{ yes: "Sim, há buraco", no: "Não há buraco" }}
+              onChange={setHuman}
+              disabled={busy}
+            />
           )}
           <Button
             title="Continuar sem análise da IA"
@@ -445,7 +522,7 @@ export default function Register() {
               setError("");
               setStep(2);
             }}
-            disabled={!analysis || busy}
+            disabled={!analysis || busy || (!analysis.unavailable && !human)}
             icon={<ArrowRight size={17} color={colors.onGreen} />}
             style={{ marginTop: 20 }}
           />
@@ -566,6 +643,73 @@ export default function Register() {
             analysis={analysis}
           />
           <Section title="Tudo certo com seu registro?" />
+          <Notice
+            text={`${problemTypes[type]} · Local aproximado. ${analysis.unavailable ? "Sem análise automática." : human === "yes" ? "Você confirmou presença de buraco." : "Você informou que não há buraco na foto."}`}
+          />
+          <Card style={{ gap: 12, marginVertical: 16 }}>
+            <Txt style={{ fontWeight: "700" }}>Registros próximos</Txt>
+            {neighbors.isPending || neighbors.isFetching ? (
+              <Txt>Conferindo ocorrências a até 30 metros…</Txt>
+            ) : neighbors.error ? (
+              <Notice
+                error
+                text="Não foi possível consultar registros próximos. Confira o mapa antes de continuar."
+              />
+            ) : !neighbors.data?.length ? (
+              <Txt>Nenhum registro semelhante encontrado nesta consulta.</Txt>
+            ) : (
+              neighbors.data.map((r) => (
+                <Button
+                  key={r.id}
+                  title={`Ver registro a ${Math.round(r.distance_m)} m: ${r.description || problemTypes[type]}`}
+                  outline
+                  onPress={() =>
+                    router.push({
+                      pathname: "/ocorrencia/[id]",
+                      params: { id: r.id },
+                    })
+                  }
+                />
+              ))
+            )}
+            {(!!neighbors.error || !!neighbors.data?.length) && (
+              <View
+                style={{ flexDirection: "row", gap: 12, alignItems: "center" }}
+              >
+                <Switch
+                  accessibilityLabel="Conferi e este é outro problema"
+                  value={different}
+                  onValueChange={setDifferent}
+                />
+                <View style={{ flex: 1 }}>
+                  <Txt>
+                    Conferi e este é outro problema. Quero manter meu registro.
+                  </Txt>
+                </View>
+              </View>
+            )}
+          </Card>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 12,
+              alignItems: "center",
+              marginBottom: 16,
+            }}
+          >
+            <Switch
+              accessibilityLabel="Informar risco imediato"
+              value={danger}
+              onValueChange={setDanger}
+              disabled={busy}
+            />
+            <View style={{ flex: 1 }}>
+              <Txt>Há risco imediato no local (avaliação do usuário).</Txt>
+            </View>
+          </View>
+          {danger && (
+            <Notice text="O ViaAlerta não é um serviço de emergência. A confiança da IA não mede gravidade. Procure os canais oficiais adequados se houver perigo imediato." />
+          )}
           <Card style={{ gap: 13, marginBottom: 22 }}>
             <View>
               <Txt muted style={{ fontSize: 10 }}>

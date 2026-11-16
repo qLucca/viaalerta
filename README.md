@@ -153,9 +153,9 @@ Configure `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` e
 `EXPO_PUBLIC_DETECTION_API_URL`. A API do Android exige HTTPS. As variáveis públicas
 entram no binário; o APK existente não recebe alterações de URL automaticamente.
 
-O APK local em `distribuicao/ViaAlerta-Android-1.0.1.apk` usa a API e a web da Azure.
-Ele mantém a assinatura de teste da versão 1.0.0 e o pacote `com.viaalerta.app`, com
-código de versão 2. A pasta de distribuição fica fora do Git. A compilação e a assinatura
+O APK local em `distribuicao/ViaAlerta-Android-1.0.3.apk` usa a API e a web da Azure.
+Ele mantém a assinatura de teste das versões anteriores e o pacote `com.viaalerta.app`, com
+código de versão 4. A pasta de distribuição fica fora do Git. A compilação e a assinatura
 foram verificadas; a instalação e o fluxo completo ainda precisam de teste no aparelho.
 Para distribuição de produção, configure uma chave de assinatura própria e revise as
 vulnerabilidades das dependências. Não é necessário gerar APK para revisar o código.
@@ -253,10 +253,16 @@ publicadas. A remoção desses arquivos deve ser tratada pelo administrador.
 
 O painel separa totais pessoais e públicos. O mapa tem filtros por situação,
 tipo, período e autoria, com lista navegável por teclado. Gestores e
-administradores com MFA podem exportar a fila autorizada em CSV. O Android 1.0.2 reconhece os perfis institucionais, verifica MFA, mostra o
+administradores com MFA podem exportar a fila autorizada em CSV. O Android 1.0.3 reconhece os perfis institucionais, cadastra e verifica MFA com QR Code ou chave manual, mostra o
 histórico e publica andamentos com motivo ou foto de conclusão quando exigidos.
-A administração completa de acessos abre o portal seguro no navegador. O primeiro
-autenticador é configurado no portal; depois, o código verifica a sessão no app.
+A administração de usuários, denúncias e acessos institucionais funciona em telas nativas,
+com justificativa, confirmação de decisões e auditoria no servidor. O aplicativo também
+permite editar ou cancelar registros próprios antes do atendimento, denunciar conteúdo,
+registrar outros tipos de problemas para avaliação humana e consultar ocorrências próximas.
+A IA continua restrita à detecção de buracos; risco imediato é informado pela pessoa.
+Foto privada de perfil, troca de senha, preferências de contato e a política de privacidade
+estão disponíveis no app. O envio real de mensagens depende da configuração dos provedores.
+Consulte [o guia do Android](docs/ANDROID.md) para instalação e limites do modo offline.
 A seleção de fotos usa alternativa compatível no Android após falha e converte a
 imagem para JPEG. A validação em aparelho físico continua necessária.
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Photo, Point } from "../types";
+import { problemTypes, type ProblemType } from "./registration.ts";
 
 const schema = z.object({
   id: z.string().uuid(),
@@ -18,6 +19,10 @@ const schema = z.object({
   }),
   point: z.tuple([z.number().min(-90).max(90), z.number().min(-180).max(180)]),
   description: z.string().max(1000),
+  problem_type: z
+    .enum(Object.keys(problemTypes) as [ProblemType, ...ProblemType[]])
+    .default("buraco"),
+  immediate_danger: z.boolean().default(false),
   created_at: z.string().datetime(),
 });
 export type OfflineDraft = z.infer<typeof schema>;
@@ -69,6 +74,7 @@ export function draftQueue(storage: Storage, files: Files) {
     photo: Photo,
     point: Point,
     description: string,
+    options: { type?: ProblemType; danger?: boolean } = {},
   ) {
     const input = schema.parse({
       id,
@@ -76,6 +82,8 @@ export function draftQueue(storage: Storage, files: Files) {
       photo,
       point,
       description,
+      problem_type: options.type || "buraco",
+      immediate_danger: options.danger || false,
       created_at: new Date().toISOString(),
     });
     return locked(owner, async () => {

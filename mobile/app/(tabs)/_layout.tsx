@@ -1,11 +1,28 @@
 import { Tabs, Redirect } from "expo-router";
 import { View } from "react-native";
-import { Home, Map, Plus, ClipboardList, UserRound, Bell } from "lucide-react-native";
+import {
+  Home,
+  Map,
+  Plus,
+  ClipboardList,
+  UserRound,
+  Bell,
+} from "lucide-react-native";
 import { useAuth } from "../../src/providers";
 import { useTheme } from "../../src/theme";
 import { Loading } from "../../src/components/ui";
+import { useQuery } from "@tanstack/react-query";
+import { notifications } from "../../src/lib/process";
 export default function TabLayout() {
-  const { user, loading } = useAuth();
+  const { user, loading, demo } = useAuth();
+  const unread = useQuery({
+    queryKey: ["notifications", user?.id],
+    queryFn: notifications,
+    enabled: !!user && !demo && !loading,
+    refetchInterval: 15000,
+    retry: false,
+  });
+  const unreadCount = unread.data?.filter((n) => !n.read_at).length || 0;
   const { colors } = useTheme();
   if (loading) return <Loading />;
   if (!user) return <Redirect href="/login" />;
@@ -68,7 +85,18 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <ClipboardList size={21} color={color} />,
         }}
       />
-      <Tabs.Screen name="notificacoes" options={{ title: "Avisos", tabBarIcon: ({ color }) => <Bell size={21} color={color} /> }} />
+      <Tabs.Screen
+        name="notificacoes"
+        options={{
+          title: "Avisos",
+          tabBarBadge: unreadCount
+            ? unreadCount > 99
+              ? "99+"
+              : unreadCount
+            : undefined,
+          tabBarIcon: ({ color }) => <Bell size={21} color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="perfil"
         options={{

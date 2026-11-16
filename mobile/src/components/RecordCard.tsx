@@ -7,9 +7,11 @@ import type { Occurrence } from "../types";
 export function RecordCard({
   record,
   compact = false,
+  mine = false,
 }: {
   record: Occurrence;
   compact?: boolean;
+  mine?: boolean;
 }) {
   const { colors } = useTheme();
   return (
@@ -17,7 +19,10 @@ export function RecordCard({
       accessibilityRole="button"
       accessibilityLabel={`Ver ocorrência: ${record.description}`}
       onPress={() =>
-        router.push({ pathname: "/ocorrencia/[id]", params: { id: record.id } })
+        router.push({
+          pathname: "/ocorrencia/[id]",
+          params: { id: record.id, mine: mine ? "1" : "0" },
+        })
       }
       style={{ marginBottom: 13 }}
     >
@@ -29,6 +34,8 @@ export function RecordCard({
           gap: compact ? 12 : 0,
         }}
       >
+        {!!record.cancelled_at && <Txt>Cancelado pelo autor</Txt>}
+        {!!record.hidden_at && <Txt>Ocultado após moderação</Txt>}
         <Image
           source={{ uri: record.image_url }}
           style={{

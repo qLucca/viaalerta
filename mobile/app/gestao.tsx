@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { View, Pressable } from "react-native";
+import { View, Pressable, Platform, Share } from "react-native";
+import {
+  StorageAccessFramework,
+  writeAsStringAsync,
+} from "expo-file-system/legacy";
+import { queueCsv } from "../src/lib/csv";
+import { adminRpc } from "../src/lib/admin";
 import { router, Redirect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -17,7 +23,37 @@ import { listOccurrences } from "../src/lib/occurrences";
 import { statusLabels, type Status } from "../src/types";
 export default function Management() {
   const { user, loading } = useAuth();
-  const { staff, needsMfa, pending, error } = useRole();
+  const { role, staff, needsMfa, pending, error } = useRole();
+  const [exporting, setExporting] = useState(false),
+    [message, setMessage] = useState("");
+  async function exportCsv() {
+    setExporting(true);
+    setMessage("");
+    try {
+      const rows = await adminRpc<Record<string, unknown>[]>(
+        "viaalerta_export_queue",
+      );
+      const csv = queueCsv(rows);
+      if (Platform.OS === "android") {
+        const selected =
+          await StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (!selected.granted) return;
+        const uri = await StorageAccessFramework.createFileAsync(
+          selected.directoryUri,
+          "fila-municipal.csv",
+          "text/csv",
+        );
+        await writeAsStringAsync(uri, csv);
+        setMessage(
+          "CSV salvo na pasta escolhida. Inclui até 1.000 registros ativos autorizados para sua conta.",
+        );
+      } else await Share.share({ message: csv, title: "Fila municipal CSV" });
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  }
   const [status, setStatus] = useState<Status | "">("");
   const [page, setPage] = useState(0);
   const list = useQuery({
@@ -25,6 +61,7 @@ export default function Management() {
     queryFn: () =>
       listOccurrences(false, {
         staff: true,
+        publicOnly: true,
         status: status || undefined,
         offset: page * 50,
         limit: 51,
@@ -59,6 +96,16 @@ export default function Management() {
         />
       ) : (
         <>
+          <Notice text="Abra um registro para consultar o local e publicar o andamento. Resolver exige foto posterior; rejeitar exige um motivo. As previsões podem ser revistas." />
+          {["manager", "admin"].includes(role) && (
+            <Button
+              title="Exportar fila municipal em CSV"
+              outline
+              busy={exporting}
+              onPress={() => void exportCsv()}
+            />
+          )}
+          {!!message && <Notice text={message} />}
           <View
             style={{
               flexDirection: "row",
@@ -107,7 +154,7 @@ export default function Management() {
                   onPress={() =>
                     router.push({
                       pathname: "/ocorrencia/[id]",
-                      params: { id: r.id },
+                      params: { id: r.id, staff: "1" },
                     })
                   }
                 />

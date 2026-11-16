@@ -39,6 +39,7 @@ export default function Drafts() {
         false,
         draft.id,
         draft.owner,
+        { type: draft.problem_type, danger: draft.immediate_danger },
       );
       await offlineDrafts.remove(draft.owner, draft.id);
       await cache.invalidateQueries();

@@ -16,8 +16,14 @@ import { DetectionImage } from "../../src/components/DetectionImage";
 import { listOccurrences } from "../../src/lib/occurrences";
 import Map from "../../src/map/Map";
 import { ProcessPanel } from "../../src/components/ProcessPanel";
+import { RecordActions } from "../../src/components/RecordActions";
 export default function Detail() {
-  const params = useLocalSearchParams<{ id: string; local?: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    local?: string;
+    staff?: string;
+    mine?: string;
+  }>();
   const { user, demo, loading } = useAuth();
   const local = demo || params.local === "1";
   const {
@@ -25,8 +31,17 @@ export default function Detail() {
     isPending,
     error,
   } = useQuery({
-    queryKey: ["detail", params.id, local],
-    queryFn: () => listOccurrences(local, { id: params.id }),
+    queryKey: ["detail", params.id, local, user?.id, params.staff, params.mine],
+    queryFn: async () => {
+      const records = await listOccurrences(local, {
+        id: params.id,
+        staff: params.staff === "1",
+        mine: params.mine === "1",
+      });
+      return records.length || local
+        ? records
+        : listOccurrences(false, { id: params.id, mine: true });
+    },
     enabled: !loading && !!user,
   });
   if (loading) return <Loading />;
@@ -107,6 +122,11 @@ export default function Detail() {
             </Txt>
           </Card>
           <ProcessPanel id={r.id} status={r.status} />
+          <RecordActions
+            key={`${r.id}:${r.description}`}
+            record={r}
+            local={local}
+          />
           <Section title="Local da ocorrência" />
           <Txt muted style={{ fontSize: 11, marginBottom: 13 }}>
             {r.latitude.toFixed(5)}, {r.longitude.toFixed(5)}

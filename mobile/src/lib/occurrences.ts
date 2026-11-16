@@ -4,6 +4,7 @@ import { readDemo, writeDemo } from "./demo";
 import { persistDemoPhoto } from "./demo-file";
 import { photoBytes } from "./photos";
 import { persistOnce } from "./submission";
+import { validateRegistration, type ProblemType } from "./registration";
 import type {
   Analysis,
   Bounds,
@@ -26,6 +27,9 @@ export async function listOccurrences(
     offset?: number;
     limit?: number;
     oldest?: boolean;
+    type?: string;
+    since?: string;
+    publicOnly?: boolean;
   } = {},
 ) {
   const offset = Math.max(0, Math.trunc(options.offset || 0));
@@ -34,6 +38,11 @@ export async function listOccurrences(
     return (await readDemo())
       .filter(
         (r) =>
+          ((options.mine && !options.publicOnly) ||
+            (!r.cancelled_at && !r.hidden_at)) &&
+          (!options.type || (r.problem_type || "buraco") === options.type) &&
+          (!options.since ||
+            Date.parse(r.created_at) >= Date.parse(options.since)) &&
           (!options.id || r.id === options.id) &&
           (!options.status || r.status === options.status) &&
           (!options.bounds ||
@@ -53,7 +62,8 @@ export async function listOccurrences(
   let query = supabase
     .from(options.mine || options.staff ? table : view)
     .select(
-      "id,latitude,longitude,image_path,status,detection_count,max_confidence,description,created_at,image_width,image_height,detections,analysis_state",
+      "id,latitude,longitude,image_path,status,detection_count,max_confidence,description,created_at,image_width,image_height,detections,analysis_state,problem_type" +
+        (options.mine || options.staff ? ",cancelled_at,hidden_at" : ""),
     )
     .order("created_at", { ascending: !!options.oldest })
     .order("id", { ascending: !!options.oldest });
@@ -65,6 +75,10 @@ export async function listOccurrences(
     query = query.eq("user_id", user.id);
   }
   if (options.status) query = query.eq("status", options.status);
+  if (options.type) query = query.eq("problem_type", options.type);
+  if (options.since) query = query.gte("created_at", options.since);
+  if (options.publicOnly && (options.mine || options.staff))
+    query = query.is("cancelled_at", null).is("hidden_at", null);
   if (options.id) query = query.eq("id", options.id);
   if (options.bounds)
     query = query
@@ -77,7 +91,7 @@ export async function listOccurrences(
     throw new Error(
       "Não foi possível carregar os registros. Confira a conexão e tente novamente.",
     );
-  const all = data as Occurrence[];
+  const all = data as unknown as Occurrence[];
   return all.map((r) => ({
     ...r,
     image_url: supabase!.storage.from(bucket).getPublicUrl(r.image_path).data
@@ -93,7 +107,38 @@ export async function saveOccurrence(
   demo: boolean,
   id = Crypto.randomUUID(),
   expectedOwner?: string,
+  options: {
+    type?: ProblemType;
+    danger?: boolean;
+    human?: boolean | null;
+  } = {},
 ) {
+  const type = options.type || "buraco";
+  const human = analysis.unavailable
+    ? null
+    : (options.human ?? analysis.detections.length > 0);
+  const feedback = analysis.unavailable
+    ? "not_verified"
+    : analysis.detections.length > 0 === human
+      ? "confirmed"
+      : "corrected";
+  validateRegistration(
+    {
+      id,
+      latitude: point[0],
+      longitude: point[1],
+      description,
+      problem_type: type,
+      immediate_danger: options.danger || false,
+      analysis_state: analysis.unavailable ? "not_requested" : "completed",
+      ai_feedback: feedback,
+      human_has_pothole: human,
+      analysis,
+      consent: true,
+    },
+    photo.width,
+    photo.height,
+  );
   const common = {
     id,
     latitude: point[0],
@@ -111,11 +156,10 @@ export async function saveOccurrence(
     analysis_state: analysis.unavailable
       ? ("not_requested" as const)
       : ("completed" as const),
-    ai_feedback: analysis.unavailable ? "not_verified" : "confirmed",
-    human_has_pothole: analysis.unavailable
-      ? null
-      : analysis.detections.length > 0,
-    problem_type: "buraco",
+    ai_feedback: feedback,
+    human_has_pothole: human,
+    problem_type: type,
+    immediate_danger: options.danger || false,
   };
   if (demo || analysis.simulated) {
     const image_url = await persistDemoPhoto(photo.uri, id);

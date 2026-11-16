@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { View, ScrollView, Pressable } from "react-native";
+import { View, ScrollView, Pressable, Switch } from "react-native";
+import { Choices } from "../../src/components/Choices";
+import { problemTypes } from "../../src/lib/registration";
 import { useQuery } from "@tanstack/react-query";
 import { LocateFixed } from "lucide-react-native";
 import { router } from "expo-router";
@@ -24,15 +26,29 @@ export default function MapPage() {
   const [accuracy, setAccuracy] = useState<number>();
   const [locating, setLocating] = useState(false);
   const [message, setMessage] = useState("");
+  const [type, setType] = useState(""),
+    [days, setDays] = useState(""),
+    [mine, setMine] = useState(false),
+    [filters, setFilters] = useState(false);
+  const since = days
+    ? new Date(Date.now() - Number(days) * 86400000).toISOString()
+    : undefined;
   const {
     data = [],
     isFetching,
     error,
     refetch,
   } = useQuery({
-    queryKey: ["map", demo, user?.id, bounds, status],
+    queryKey: ["map", demo, user?.id, bounds, status, type, days, mine],
     queryFn: () =>
-      listOccurrences(demo, { bounds, status: status || undefined }),
+      listOccurrences(demo, {
+        bounds,
+        status: status || undefined,
+        type: type || undefined,
+        since,
+        mine,
+        publicOnly: true,
+      }),
     enabled: !!bounds && !!user,
   });
   async function locate() {
@@ -54,6 +70,47 @@ export default function MapPage() {
       subtitle="Uma cidade. Muitos olhares."
       scroll={false}
     >
+      <Button
+        title={
+          filters
+            ? "Fechar filtros do mapa"
+            : "Filtrar por tipo, período e autoria"
+        }
+        outline
+        onPress={() => setFilters(!filters)}
+      />
+      {filters && (
+        <ScrollView
+          style={{ maxHeight: 220, flexGrow: 0 }}
+          contentContainerStyle={{ gap: 12, paddingVertical: 12 }}
+        >
+          <Choices
+            label="Tipo de problema"
+            value={type}
+            options={{ "": "Todos", ...problemTypes }}
+            onChange={setType}
+          />
+          <Choices
+            label="Período"
+            value={days}
+            options={{
+              "": "Todo o período",
+              "7": "7 dias",
+              "30": "30 dias",
+              "90": "90 dias",
+            }}
+            onChange={setDays}
+          />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Switch
+              accessibilityLabel="Apenas meus registros"
+              value={mine}
+              onValueChange={setMine}
+            />
+            <Txt>Apenas meus registros públicos</Txt>
+          </View>
+        </ScrollView>
+      )}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}

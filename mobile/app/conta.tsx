@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Image, Switch, View, Platform } from "react-native";
-import { Redirect } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { fetch as expoFetch } from "expo/fetch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -16,7 +16,7 @@ import { useAuth } from "../src/providers";
 import { supabase } from "../src/lib/supabase";
 import { normalizeWhatsapp } from "../src/lib/account";
 import { pickPhoto, multipartPhoto } from "../src/lib/photos";
-import { openPortal, portalUrl } from "../src/lib/portal";
+import { portalUrl } from "../src/lib/portal";
 
 type Preferences = {
   whatsapp: string;
@@ -273,11 +273,7 @@ function Settings({
         title="Privacidade e uso dos dados"
         outline
         disabled={busy}
-        onPress={() =>
-          void openPortal("/privacidade").catch(() =>
-            setError("Não foi possível abrir a página de privacidade."),
-          )
-        }
+        onPress={() => router.push("/privacidade")}
       />
       {!!error && <Notice error text={error} />}
     </Card>
