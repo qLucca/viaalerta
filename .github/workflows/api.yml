@@ -60,7 +60,7 @@ jobs:
           cd api/models
           [[ -s best.pt ]]
           # Valida apenas a entrada best.pt, sem aceitar caminhos adicionais do manifesto.
-          expected=$(awk '$2 == "best.pt" {print $1}' SHA256SUMS.txt)
+          expected=$(awk '{ sub(/\r$/, ""); if ($2 == "best.pt") print $1 }' SHA256SUMS.txt)
           [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]]
           printf '%s  best.pt\n' "$expected" | sha256sum --check --strict
           echo "MODEL_SHA256=${expected,,}" >> "$GITHUB_ENV"
