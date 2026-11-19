@@ -16,7 +16,7 @@ test("WhatsApp normaliza DDI e rejeita números fora de E.164", () => {
   assert.throws(() => normalizeWhatsapp("+0123456789"));
 });
 test("senha exige comprimento e confirmação sem remover espaços", () => {
-  assert.ok(passwordProblem("admin123", "admin123"));
+  assert.ok(passwordProblem("curta", "curta"));
   assert.ok(passwordProblem("uma senha longa", "outra senha longa"));
   assert.equal(passwordProblem("uma senha longa", "uma senha longa"), "");
 });

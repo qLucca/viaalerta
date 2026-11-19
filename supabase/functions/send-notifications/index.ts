@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.80.0";
 import { createWorker } from "./worker.ts";
 import { createWhatsappWorker } from "./whatsapp.ts";
+import type { EmailProvider } from "./email-provider.ts";
 const url = Deno.env.get("SUPABASE_URL")!;
 const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const client = createClient(url, key, {
@@ -14,8 +15,12 @@ const db = {
 };
 const email = createWorker(
   {
+    provider: (Deno.env.get("EMAIL_PROVIDER") || "resend") as EmailProvider,
     secret: Deno.env.get("NOTIFICATIONS_CRON_SECRET"),
-    apiKey: Deno.env.get("RESEND_API_KEY"),
+    apiKey:
+      Deno.env.get("EMAIL_PROVIDER") === "brevo"
+        ? Deno.env.get("BREVO_API_KEY")
+        : Deno.env.get("RESEND_API_KEY"),
     from: Deno.env.get("NOTIFICATIONS_FROM"),
     webUrl: Deno.env.get("NOTIFICATIONS_WEB_URL"),
   },

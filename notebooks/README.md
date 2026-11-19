@@ -1,7 +1,20 @@
 # Dados, treinamento e avaliação
 
+A pipeline ativa e `pipeline_buracos_opencv_genetica.ipynb`, com uma classe: `0 = buraco`.
+Ela filtra a base preparada, conserva os negativos conhecidos e as divisoes de
+avaliacao, valida as imagens com OpenCV e ajusta o detector atual na GPU.
+
+A configuracao padrao usa ate 60 epocas, paciencia de 12 e taxa inicial 0,001.
+`BUSCA_YOLO=False` prioriza o prazo; a busca genetica pode ser habilitada em uma
+execucao posterior. Os pesos antigos e os experimentos multiclasse permanecem
+preservados. As copias de seguranca ficam em `work/`, fora do Git.
+
+Ao terminar, salva `curvas_aprendizado.png`, mostra as curvas no notebook e
+compara candidato e modelo anterior no mesmo conjunto de teste em `metrics.json`.
+A API nao troca de modelo automaticamente.
+
 O notebook `pipeline_buracos_yolo_v2.ipynb` documenta o detector YOLO11s do ViaAlerta.
-O treinamento atual já terminou. Para executar a aplicação, use o `best.pt` salvo;
+O treinamento desse detector anterior já terminou. Para executar a aplicação, use o `best.pt` salvo;
 não execute o notebook inteiro nem a célula `modelo_yolo.train()`.
 
 ## Dataset local

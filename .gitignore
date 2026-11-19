@@ -76,6 +76,7 @@ distribuicao/
 *.zip
 work/
 outputs/
+/output/
 
 # Artefatos de hospedagem antiga
 .wrangler/

@@ -1,0 +1,40 @@
+name: Processar notificacoes por e-mail
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+permissions: {}
+concurrency:
+  group: email-notifications
+  cancel-in-progress: false
+jobs:
+  email:
+    if: ${{ vars.EMAIL_NOTIFICATIONS_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      EMAIL_NOTIFICATIONS_URL: ${{ vars.EMAIL_NOTIFICATIONS_URL }}
+      NOTIFICATIONS_CRON_SECRET: ${{ secrets.NOTIFICATIONS_CRON_SECRET }}
+    steps:
+      - name: Processar fila autorizada de e-mails
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${EMAIL_NOTIFICATIONS_URL:?Configure a URL da Edge Function}"
+          : "${NOTIFICATIONS_CRON_SECRET:?Configure o segredo do agendador}"
+          [[ "$EMAIL_NOTIFICATIONS_URL" == https://*.supabase.co/functions/v1/send-notifications ]]
+          response=$(mktemp)
+          trap 'rm -f "$response"' EXIT
+          code=$(curl --silent --show-error --max-time 240 --output "$response" --write-out '%{http_code}' \
+            --request POST --header "Authorization: Bearer $NOTIFICATIONS_CRON_SECRET" \
+            "$EMAIL_NOTIFICATIONS_URL?channel=email")
+          [[ "$code" == 200 ]] || { echo "A fila de e-mail respondeu HTTP $code. Confira a configuracao e os logs privados da funcao."; exit 1; }
+          python - "$response" <<'PY'
+          import json, sys
+          with open(sys.argv[1]) as stream:
+              result = json.load(stream)
+          keys = ('sent', 'failed', 'unconfirmed', 'deferred')
+          assert all(type(result.get(key)) is int and result[key] >= 0 for key in keys)
+          print(json.dumps({key: result[key] for key in keys}))
+          assert result['failed'] == 0 and result['unconfirmed'] == 0, 'Ha envios pendentes de revisao; consulte os logs privados.'
+          PY

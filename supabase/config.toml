@@ -1,0 +1,3 @@
+# O worker usa um segredo exclusivo do agendador; não aceita chamadas de usuários.
+[functions.send-notifications]
+verify_jwt = false
